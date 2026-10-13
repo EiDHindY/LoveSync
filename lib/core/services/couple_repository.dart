@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -180,6 +181,17 @@ class CoupleRepository extends ChangeNotifier {
 
   String _dateKey(DateTime dt) {
     return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+  }
+
+  static const String _codeAlphabet = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+
+  static String generateUniqueInviteCode() {
+    final random = Random.secure();
+    final buffer = StringBuffer('LOVE-');
+    for (int i = 0; i < 6; i++) {
+      buffer.write(_codeAlphabet[random.nextInt(_codeAlphabet.length)]);
+    }
+    return buffer.toString();
   }
 
   static String normalizeInviteCode(String raw) {
@@ -783,8 +795,7 @@ class CoupleRepository extends ChangeNotifier {
 
   // Generate New Invite Code
   void regenerateInviteCode() {
-    final codeNum = (1000 + (DateTime.now().millisecondsSinceEpoch % 9000));
-    _inviteCode = 'LOVE-$codeNum';
+    _inviteCode = generateUniqueInviteCode();
     _saveToStorage();
     _subscribeToChannel();
     notifyListeners();
@@ -900,8 +911,7 @@ class CoupleRepository extends ChangeNotifier {
       _recoveryEmail = email.trim();
     }
     if (_inviteCode.isEmpty) {
-      final randomNum = 1000 + (DateTime.now().millisecondsSinceEpoch % 9000);
-      _inviteCode = 'LOVE-$randomNum';
+      _inviteCode = generateUniqueInviteCode();
     }
 
     if (SupabaseConfig.isInitialized) {
@@ -917,15 +927,31 @@ class CoupleRepository extends ChangeNotifier {
             if (_coupleId.isNotEmpty) 'couple_id': _coupleId,
           });
           if (_coupleId.isEmpty && _inviteCode.isNotEmpty) {
-            final cRes = await client.from('couples').insert({
-              'invite_code': _inviteCode,
-              'created_by': authUser.id,
-              'default_cycle_length': _cycleLength,
-              'default_period_length': _periodLength,
-              'safety_buffer_days': _safetyBufferDays,
-            }).select().single();
-            _coupleId = cRes['id'];
-            await client.from('profiles').update({'couple_id': _coupleId}).eq('id', authUser.id);
+            Map<String, dynamic>? cRes;
+            int attempts = 0;
+            while (cRes == null && attempts < 4) {
+              attempts++;
+              try {
+                cRes = await client.from('couples').insert({
+                  'invite_code': _inviteCode,
+                  'created_by': authUser.id,
+                  'default_cycle_length': _cycleLength,
+                  'default_period_length': _periodLength,
+                  'safety_buffer_days': _safetyBufferDays,
+                }).select().single();
+              } catch (e) {
+                debugPrint('Insert couple attempt $attempts notice: $e');
+                if (attempts < 4) {
+                  _inviteCode = generateUniqueInviteCode();
+                } else {
+                  rethrow;
+                }
+              }
+            }
+            if (cRes != null) {
+              _coupleId = cRes['id'];
+              await client.from('profiles').update({'couple_id': _coupleId}).eq('id', authUser.id);
+            }
           }
         }
       } catch (e) {

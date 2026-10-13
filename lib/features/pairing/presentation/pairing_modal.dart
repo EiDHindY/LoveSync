@@ -170,7 +170,7 @@ class _PairingModalState extends State<PairingModal> {
               controller: _codeController,
               textCapitalization: TextCapitalization.characters,
               decoration: InputDecoration(
-                hintText: 'e.g. LOVE-9123',
+                hintText: 'e.g. LOVE-7K9X2B',
                 errorText: _error,
                 filled: true,
                 fillColor: AppTheme.backgroundLight,

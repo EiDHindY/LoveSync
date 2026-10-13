@@ -426,7 +426,7 @@ class _ConnectPartnerScreenState extends ConsumerState<ConnectPartnerScreen> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Enter the 6-character code shown on your partner\'s screen (e.g. LOVE-7821).',
+                        'Enter the 6-character code shown on your partner\'s screen (e.g. LOVE-7K9X2B).',
                         textAlign: TextAlign.center,
                         style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                       ),
@@ -442,7 +442,7 @@ class _ConnectPartnerScreenState extends ConsumerState<ConnectPartnerScreen> {
                           color: AppTheme.crimson,
                         ),
                         decoration: InputDecoration(
-                          hintText: 'LOVE-XXXX',
+                          hintText: 'LOVE-XXXXXX',
                           filled: true,
                           fillColor: AppTheme.backgroundLight,
                           border: OutlineInputBorder(
