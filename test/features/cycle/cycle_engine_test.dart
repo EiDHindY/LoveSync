@@ -1,0 +1,136 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:love_app/features/cycle/domain/cycle_engine.dart';
+import 'package:love_app/features/cycle/domain/fertility_status.dart';
+
+void main() {
+  group('CycleEngine Fertility Calculations', () {
+    final basePeriodStart = DateTime.utc(2026, 10, 1);
+
+    test('Returns unknown when no period start date is provided', () {
+      final result = CycleEngine.calculateFertility(
+        targetDate: DateTime.utc(2026, 10, 12),
+        lastPeriodStartDate: null,
+      );
+
+      expect(result.phase, equals(FertilityPhase.unknown));
+      expect(result.dayOfCycle, isNull);
+    });
+
+    test('Standard 28-day cycle: calculates correct phases', () {
+      // Day 1 to 5: Menstruation
+      final day1 = CycleEngine.calculateFertility(
+        targetDate: basePeriodStart, // Oct 1 = Day 1
+        lastPeriodStartDate: basePeriodStart,
+        cycleLength: 28,
+        periodLength: 5,
+        safetyBufferDays: 2,
+      );
+      expect(day1.dayOfCycle, equals(1));
+      expect(day1.phase, equals(FertilityPhase.menstruating));
+
+      final day4 = CycleEngine.calculateFertility(
+        targetDate: basePeriodStart.add(const Duration(days: 3)), // Oct 4 = Day 4
+        lastPeriodStartDate: basePeriodStart,
+        cycleLength: 28,
+        periodLength: 5,
+        safetyBufferDays: 2,
+      );
+      expect(day4.dayOfCycle, equals(4));
+      expect(day4.phase, equals(FertilityPhase.menstruating));
+
+      // Day 6: Pre-fertile Safe Window
+      final day6 = CycleEngine.calculateFertility(
+        targetDate: basePeriodStart.add(const Duration(days: 5)), // Oct 6 = Day 6
+        lastPeriodStartDate: basePeriodStart,
+        cycleLength: 28,
+        periodLength: 5,
+        safetyBufferDays: 2,
+      );
+      expect(day6.dayOfCycle, equals(6));
+      expect(day6.phase, equals(FertilityPhase.safe));
+
+      // Day 7: Pre-fertile Caution Buffer (ovulation is 14, core fertile starts at 9, buffer at 7)
+      final day7 = CycleEngine.calculateFertility(
+        targetDate: basePeriodStart.add(const Duration(days: 6)), // Oct 7 = Day 7
+        lastPeriodStartDate: basePeriodStart,
+        cycleLength: 28,
+        periodLength: 5,
+        safetyBufferDays: 2,
+      );
+      expect(day7.dayOfCycle, equals(7));
+      expect(day7.phase, equals(FertilityPhase.caution));
+
+      // Day 9: Core Fertile Window (sperm can survive 5 days until ovulation)
+      final day9 = CycleEngine.calculateFertility(
+        targetDate: basePeriodStart.add(const Duration(days: 8)), // Oct 9 = Day 9
+        lastPeriodStartDate: basePeriodStart,
+        cycleLength: 28,
+        periodLength: 5,
+        safetyBufferDays: 2,
+      );
+      expect(day9.dayOfCycle, equals(9));
+      expect(day9.phase, equals(FertilityPhase.fertile));
+
+      // Day 14: Ovulation Day (Peak Risk)
+      final day14 = CycleEngine.calculateFertility(
+        targetDate: basePeriodStart.add(const Duration(days: 13)), // Oct 14 = Day 14
+        lastPeriodStartDate: basePeriodStart,
+        cycleLength: 28,
+        periodLength: 5,
+        safetyBufferDays: 2,
+      );
+      expect(day14.dayOfCycle, equals(14));
+      expect(day14.phase, equals(FertilityPhase.fertile));
+      expect(day14.title, contains('Ovulation'));
+
+      // Day 16: Post-fertile Caution Buffer
+      final day16 = CycleEngine.calculateFertility(
+        targetDate: basePeriodStart.add(const Duration(days: 15)), // Oct 16 = Day 16
+        lastPeriodStartDate: basePeriodStart,
+        cycleLength: 28,
+        periodLength: 5,
+        safetyBufferDays: 2,
+      );
+      expect(day16.dayOfCycle, equals(16));
+      expect(day16.phase, equals(FertilityPhase.caution));
+
+      // Day 18: Post-ovulation Safe Window (Luteal phase, egg dissolved)
+      final day18 = CycleEngine.calculateFertility(
+        targetDate: basePeriodStart.add(const Duration(days: 17)), // Oct 18 = Day 18
+        lastPeriodStartDate: basePeriodStart,
+        cycleLength: 28,
+        periodLength: 5,
+        safetyBufferDays: 2,
+      );
+      expect(day18.dayOfCycle, equals(18));
+      expect(day18.phase, equals(FertilityPhase.safe));
+      expect(day18.recommendation, contains('Lowest probability of pregnancy'));
+
+      // Day 28: End of cycle safe window
+      final day28 = CycleEngine.calculateFertility(
+        targetDate: basePeriodStart.add(const Duration(days: 27)), // Oct 28 = Day 28
+        lastPeriodStartDate: basePeriodStart,
+        cycleLength: 28,
+        periodLength: 5,
+        safetyBufferDays: 2,
+      );
+      expect(day28.dayOfCycle, equals(28));
+      expect(day28.phase, equals(FertilityPhase.safe));
+    });
+
+    test('Short 24-day cycle: safely flags early fertile overlap', () {
+      final shortStart = DateTime.utc(2026, 10, 1);
+      // For 24-day cycle, ovulation is day 10. Core fertile is days 5-11. Buffer starts day 3.
+      // Day 4 is menstruation, but overlaps with fertile buffer!
+      final day4 = CycleEngine.calculateFertility(
+        targetDate: shortStart.add(const Duration(days: 3)), // Day 4
+        lastPeriodStartDate: shortStart,
+        cycleLength: 24,
+        periodLength: 5,
+        safetyBufferDays: 2,
+      );
+      expect(day4.phase, equals(FertilityPhase.caution));
+      expect(day4.title, contains('Period + Fertile Buffer'));
+    });
+  });
+}
