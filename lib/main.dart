@@ -7,6 +7,7 @@ import 'package:love_app/core/services/notification_service.dart';
 import 'package:love_app/core/theme/app_theme.dart';
 import 'package:love_app/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:love_app/features/onboarding/presentation/create_profile_screen.dart';
+import 'package:love_app/features/onboarding/presentation/welcome_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -38,9 +39,14 @@ class LoveSyncApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final repo = ref.watch(coupleRepositoryProvider);
 
-    final Widget homeScreen = (repo.hasCompletedOnboarding || repo.hasCreatedProfile)
-        ? const DashboardScreen()
-        : const CreateProfileScreen();
+    final Widget homeScreen;
+    if (repo.hasCompletedOnboarding || repo.hasCreatedProfile) {
+      homeScreen = const DashboardScreen();
+    } else if (repo.isSignedIn) {
+      homeScreen = const CreateProfileScreen();
+    } else {
+      homeScreen = const WelcomeScreen();
+    }
 
     return MaterialApp(
       title: 'LoveSync',

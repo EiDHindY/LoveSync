@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:love_app/core/providers/app_providers.dart';
 import 'package:love_app/core/theme/app_theme.dart';
 import 'package:love_app/features/dashboard/presentation/dashboard_screen.dart';
+import 'package:love_app/features/onboarding/presentation/create_profile_screen.dart';
 
 class WelcomeScreen extends ConsumerStatefulWidget {
   const WelcomeScreen({super.key});
@@ -12,250 +13,199 @@ class WelcomeScreen extends ConsumerStatefulWidget {
 }
 
 class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
-  final _nameController = TextEditingController(text: 'Me');
-  bool _tracksCycle = true;
-  bool _isJoining = false;
-  final _codeController = TextEditingController();
-  bool _isLoading = false;
+  bool _isGetStartedLoading = false;
+  bool _isLogInLoading = false;
   String? _errorMessage;
 
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _codeController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _handleStartNewSpace() async {
-    final name = _nameController.text.trim();
-    if (name.isEmpty) {
-      setState(() => _errorMessage = 'Please enter your name.');
-      return;
-    }
-
+  Future<void> _handleGetStarted() async {
     setState(() {
-      _isLoading = true;
+      _isGetStartedLoading = true;
       _errorMessage = null;
     });
 
-    final repo = ref.read(coupleRepositoryProvider.notifier);
-    await repo.setupNewUser(
-      displayName: name,
-      tracksCycle: _tracksCycle,
-    );
-
-    if (mounted) {
-      setState(() => _isLoading = false);
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const DashboardScreen()),
-      );
-    }
-  }
-
-  Future<void> _handleJoinWithCode() async {
-    final name = _nameController.text.trim();
-    final code = _codeController.text.trim().toUpperCase();
-
-    if (name.isEmpty) {
-      setState(() => _errorMessage = 'Please enter your name.');
-      return;
-    }
-    if (code.isEmpty) {
-      setState(() => _errorMessage = 'Please enter your partner\'s invite code.');
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-
-    final repo = ref.read(coupleRepositoryProvider.notifier);
-    final success = await repo.joinCoupleWithCode(
-      code: code,
-      displayName: name,
-      tracksCycle: _tracksCycle,
-    );
-
-    if (mounted) {
-      setState(() => _isLoading = false);
-      if (success) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const DashboardScreen()),
-        );
-      } else {
-        setState(() => _errorMessage = 'Invalid or expired invite code. Please check with your partner.');
+    try {
+      final repo = ref.read(coupleRepositoryProvider.notifier);
+      await repo.signInWithGoogle();
+      if (mounted) {
+        setState(() => _isGetStartedLoading = false);
+        final currentRepo = ref.read(coupleRepositoryProvider);
+        if (currentRepo.hasCompletedOnboarding || currentRepo.hasCreatedProfile) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const DashboardScreen()),
+          );
+        } else if (currentRepo.isSignedIn) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const CreateProfileScreen()),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isGetStartedLoading = false;
+          _errorMessage = 'Sign-In error: ${e.toString().replaceAll('Exception: ', '')}';
+        });
       }
     }
   }
 
-  void _showRestoreDialog() {
-    final emailController = TextEditingController();
-    final passwordController = TextEditingController();
+  Future<void> _handleLogIn() async {
+    setState(() {
+      _isLogInLoading = true;
+      _errorMessage = null;
+    });
 
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Restore Space on New Device', style: TextStyle(fontWeight: FontWeight.bold)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Enter the email and password you previously linked to restore your couple data.',
-              style: TextStyle(fontSize: 13, color: Colors.grey),
+    try {
+      final repo = ref.read(coupleRepositoryProvider.notifier);
+      await repo.signInWithGoogle();
+      if (mounted) {
+        setState(() => _isLogInLoading = false);
+        final currentRepo = ref.read(coupleRepositoryProvider);
+        if (currentRepo.hasCompletedOnboarding || currentRepo.hasCreatedProfile) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const DashboardScreen()),
+          );
+        } else if (currentRepo.isSignedIn) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              backgroundColor: AppTheme.plum,
+              content: Text('No existing space found with this account. Let\'s set up your profile!'),
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: emailController,
-              decoration: const InputDecoration(
-                labelText: 'Email',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: passwordController,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Password',
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Checking cloud backup...')),
-              );
-            },
-            child: const Text('Restore'),
-          ),
-        ],
-      ),
-    );
+          );
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const CreateProfileScreen()),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLogInLoading = false;
+          _errorMessage = 'Log-In error: ${e.toString().replaceAll('Exception: ', '')}';
+        });
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    // Listen for OAuth callbacks that complete asynchronously
+    ref.listen(coupleRepositoryProvider, (previous, next) {
+      if (next.hasCompletedOnboarding || next.hasCreatedProfile) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const DashboardScreen()),
+        );
+      } else if (next.isSignedIn) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const CreateProfileScreen()),
+        );
+      }
+    });
+
     return Scaffold(
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               const SizedBox(height: 20),
-              // App Logo / Icon
+
+              // App Logo / Icon with glowing halo
               Container(
-                width: 76,
-                height: 76,
+                width: 90,
+                height: 90,
                 decoration: BoxDecoration(
                   color: AppTheme.blush,
                   shape: BoxShape.circle,
-                  border: Border.all(color: AppTheme.roseGold.withValues(alpha: 0.5), width: 2),
+                  border: Border.all(color: AppTheme.roseGold.withValues(alpha: 0.6), width: 2.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppTheme.crimson.withValues(alpha: 0.15),
+                      blurRadius: 24,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
                 ),
-                child: const Center(
-                  child: Icon(Icons.favorite_rounded, color: AppTheme.crimson, size: 40),
+                child: Center(
+                  child: Image.asset(
+                    'assets/images/app_logo.png',
+                    width: 52,
+                    height: 52,
+                    errorBuilder: (context, error, stackTrace) => const Icon(
+                      Icons.favorite_rounded,
+                      color: AppTheme.crimson,
+                      size: 46,
+                    ),
+                  ),
                 ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 18),
+
+              // Title & Subtitle
               const Text(
-                'Welcome to LoveSync',
+                'LoveSync',
                 style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
+                  fontSize: 32,
+                  fontWeight: FontWeight.w800,
                   color: AppTheme.plum,
+                  letterSpacing: -0.5,
                 ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
               const Text(
-                'A private intimacy space for you and your partner.',
+                'A private, zero-pressure space for intimate connection & rhythm.',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14, color: Color(0xFF666666)),
+                style: TextStyle(
+                  fontSize: 15,
+                  color: Color(0xFF666666),
+                  height: 1.4,
+                ),
               ),
               const SizedBox(height: 28),
 
-              // Step 1: Your Info
+              // Feature Highlights Card
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(18),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(22),
                   border: Border.all(color: AppTheme.blush),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'YOUR PROFILE',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.1,
-                        color: AppTheme.crimson,
-                      ),
+                    _buildFeatureRow(
+                      icon: Icons.lock_outline_rounded,
+                      title: 'Zero-Knowledge Privacy',
+                      description: 'Direct couple encryption. Your intimacy data belongs only to you two.',
                     ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _nameController,
-                      decoration: InputDecoration(
-                        labelText: 'Your First Name / Nickname',
-                        filled: true,
-                        fillColor: AppTheme.backgroundLight,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: AppTheme.blush),
-                        ),
-                      ),
+                    const Divider(height: 22, color: AppTheme.blush),
+                    _buildFeatureRow(
+                      icon: Icons.local_fire_department_rounded,
+                      title: 'Double-Blind Mood Match',
+                      description: 'No pressure, no rejection. You only know when you are both in the mood.',
                     ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Menstrual Cycle Tracking:',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.plum,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Who tracks periods and safe days in this relationship?',
-                      style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        _buildCycleOption(
-                          hasCycle: true,
-                          title: 'I Track My Cycle',
-                          subtitle: 'Logs periods & safe window',
-                          icon: Icons.calendar_month_rounded,
-                        ),
-                        const SizedBox(width: 10),
-                        _buildCycleOption(
-                          hasCycle: false,
-                          title: 'I Do Not Track',
-                          subtitle: 'Views safe days & alerts',
-                          icon: Icons.male_rounded,
-                        ),
-                      ],
+                    const Divider(height: 22, color: AppTheme.blush),
+                    _buildFeatureRow(
+                      icon: Icons.calendar_today_rounded,
+                      title: 'Cycle & Rhythm Sync',
+                      description: 'Stay in tune with fertile and safe intimacy days together.',
                     ),
                   ],
                 ),
               ),
 
-              const SizedBox(height: 20),
+              const SizedBox(height: 28),
 
-              // Error banner if any
+              // Error display if any
               if (_errorMessage != null) ...[
                 Container(
                   width: double.infinity,
@@ -265,202 +215,142 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(color: AppTheme.fertileRed.withValues(alpha: 0.5)),
                   ),
-                  child: Text(
-                    _errorMessage!,
-                    style: const TextStyle(color: AppTheme.fertileRed, fontSize: 13, fontWeight: FontWeight.w600),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error_outline, size: 18, color: AppTheme.fertileRed),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _errorMessage!,
+                          style: const TextStyle(
+                            color: AppTheme.fertileRed,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 20),
               ],
 
-              // Toggle between "Start New Space" and "Join Existing Space"
-              Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: AppTheme.blush.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(16),
+              // PATH 1: GET STARTED (NEW USERS)
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: (_isGetStartedLoading || _isLogInLoading) ? null : _handleGetStarted,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.crimson,
+                    foregroundColor: Colors.white,
+                    elevation: 3,
+                    shadowColor: AppTheme.crimson.withValues(alpha: 0.4),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                  ),
+                  child: _isGetStartedLoading
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white),
+                        )
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: const [
+                            Text(
+                              'Get Started',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Icon(Icons.arrow_forward_rounded, size: 20),
+                          ],
+                        ),
                 ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => setState(() {
-                          _isJoining = false;
-                          _errorMessage = null;
-                        }),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          decoration: BoxDecoration(
-                            color: !_isJoining ? Colors.white : Colors.transparent,
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: !_isJoining
-                                ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4)]
-                                : null,
-                          ),
-                          child: Center(
-                            child: Text(
-                              'Start New Couple Space',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: !_isJoining ? AppTheme.crimson : Colors.grey.shade600,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => setState(() {
-                          _isJoining = true;
-                          _errorMessage = null;
-                        }),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          decoration: BoxDecoration(
-                            color: _isJoining ? Colors.white : Colors.transparent,
-                            borderRadius: BorderRadius.circular(12),
-                            boxShadow: _isJoining
-                                ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4)]
-                                : null,
-                          ),
-                          child: Center(
-                            child: Text(
-                              'Join with Invite Code',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: _isJoining ? AppTheme.crimson : Colors.grey.shade600,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
+              ),
+
+              const SizedBox(height: 14),
+
+              // PATH 2: LOG IN (RETURNING USERS)
+              Container(
+                width: double.infinity,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: Colors.grey.shade300),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.03),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
                     ),
                   ],
                 ),
-              ),
-
-              const SizedBox(height: 20),
-
-              // Action Form
-              if (!_isJoining) ...[
-                // Start New Space Card
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppTheme.blush),
-                  ),
-                  child: Column(
-                    children: [
-                      const Icon(Icons.favorite_border, color: AppTheme.crimson, size: 32),
-                      const SizedBox(height: 10),
-                      const Text(
-                        'Create Your Private Space',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.plum),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'This will generate a unique 6-character code that you can share with your partner.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-                      ),
-                      const SizedBox(height: 18),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: _isLoading ? null : _handleStartNewSpace,
-                          child: _isLoading
-                              ? const SizedBox(
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(18),
+                    onTap: (_isGetStartedLoading || _isLogInLoading) ? null : _handleLogIn,
+                    child: Center(
+                      child: _isLogInLoading
+                          ? const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(strokeWidth: 2.2, color: AppTheme.crimson),
+                            )
+                          : Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Image.asset(
+                                  'assets/images/google_logo.png',
                                   width: 20,
                                   height: 20,
-                                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                                )
-                              : const Text('Create Space & Get Invite Code'),
-                        ),
-                      ),
-                    ],
+                                  errorBuilder: (ctx, err, st) => const Icon(
+                                    Icons.login_rounded,
+                                    size: 20,
+                                    color: AppTheme.plum,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                const Text(
+                                  'I Already Have an Account • Log In',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppTheme.plum,
+                                    letterSpacing: 0.1,
+                                  ),
+                                ),
+                              ],
+                            ),
+                    ),
                   ),
-                ),
-              ] else ...[
-                // Join Space with Code Card
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppTheme.blush),
-                  ),
-                  child: Column(
-                    children: [
-                      const Icon(Icons.link, color: AppTheme.crimson, size: 32),
-                      const SizedBox(height: 10),
-                      const Text(
-                        'Enter Partner\'s Code',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.plum),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Paste the code your partner sent you (e.g. LOVE-7821) to connect your phones.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-                      ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: _codeController,
-                        textCapitalization: TextCapitalization.characters,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 3,
-                          color: AppTheme.crimson,
-                        ),
-                        decoration: InputDecoration(
-                          hintText: 'LOVE-XXXX',
-                          filled: true,
-                          fillColor: AppTheme.backgroundLight,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: const BorderSide(color: AppTheme.blush),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: _isLoading ? null : _handleJoinWithCode,
-                          child: _isLoading
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                                )
-                              : const Text('Connect to Partner'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-
-              const SizedBox(height: 24),
-
-              // Restore device link
-              TextButton.icon(
-                onPressed: _showRestoreDialog,
-                icon: const Icon(Icons.cloud_download_outlined, size: 16, color: Colors.grey),
-                label: const Text(
-                  'Already have an existing space? Restore with Email',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
                 ),
               ),
+
+              const SizedBox(height: 28),
+
+              // Security & Privacy footnote
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.shield_outlined, size: 14, color: Colors.grey.shade500),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Protected by Google OAuth & Supabase Realtime',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
             ],
           ),
         ),
@@ -468,52 +358,48 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
     );
   }
 
-  Widget _buildCycleOption({
-    required bool hasCycle,
-    required String title,
-    required String subtitle,
+  Widget _buildFeatureRow({
     required IconData icon,
+    required String title,
+    required String description,
   }) {
-    final isSelected = _tracksCycle == hasCycle;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _tracksCycle = hasCycle),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: isSelected ? AppTheme.blush.withValues(alpha: 0.6) : AppTheme.backgroundLight,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: isSelected ? AppTheme.crimson : AppTheme.blush,
-              width: isSelected ? 1.8 : 1.0,
-            ),
+            color: AppTheme.blush,
+            borderRadius: BorderRadius.circular(12),
           ),
+          child: Icon(icon, color: AppTheme.crimson, size: 20),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(icon, color: isSelected ? AppTheme.crimson : Colors.grey.shade600, size: 22),
-              const SizedBox(height: 6),
               Text(
                 title,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                  color: isSelected ? AppTheme.crimson : AppTheme.plum,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.plum,
                 ),
               ),
               const SizedBox(height: 2),
               Text(
-                subtitle,
-                textAlign: TextAlign.center,
+                description,
                 style: TextStyle(
-                  fontSize: 10,
+                  fontSize: 12,
                   color: Colors.grey.shade600,
+                  height: 1.35,
                 ),
               ),
             ],
           ),
         ),
-      ),
+      ],
     );
   }
 }
