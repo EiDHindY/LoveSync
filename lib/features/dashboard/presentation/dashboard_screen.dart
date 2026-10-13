@@ -414,13 +414,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     return Scaffold(
       appBar: AppBar(
         centerTitle: false,
-        titleSpacing: 18,
+        titleSpacing: 12,
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 32,
-              height: 32,
+              width: 28,
+              height: 28,
               decoration: BoxDecoration(
                 color: AppTheme.blush,
                 shape: BoxShape.circle,
@@ -430,11 +430,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ),
               ),
               child: const Center(
-                child: Icon(Icons.favorite_rounded, color: AppTheme.crimson, size: 18),
+                child: Icon(Icons.favorite_rounded, color: AppTheme.crimson, size: 16),
               ),
             ),
             const SizedBox(width: 8),
-            const Text('LoveSync'),
+            const Text(
+              'LoveSync',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
+            ),
           ],
         ),
         actions: [
@@ -443,8 +449,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               onTap: () => _openPartnerModal(context),
               borderRadius: BorderRadius.circular(20),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
                 decoration: BoxDecoration(
                   color: AppTheme.blush.withValues(alpha: 0.7),
                   borderRadius: BorderRadius.circular(20),
@@ -454,42 +460,45 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     CircleAvatar(
-                      radius: 11,
+                      radius: 10,
                       backgroundColor: AppTheme.crimson,
                       child: Text(
                         repo.partnerName.isNotEmpty ? repo.partnerName[0].toUpperCase() : 'P',
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
-                          fontSize: 11,
+                          fontSize: 10,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 6),
-                    Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'My Partner',
-                          style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.plumLight,
-                            letterSpacing: 0.2,
+                    const SizedBox(width: 5),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 100),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'My Partner',
+                            style: TextStyle(
+                              fontSize: 8.5,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.plumLight,
+                              letterSpacing: 0.2,
+                            ),
                           ),
-                        ),
-                        Text(
-                          repo.partnerName.isNotEmpty ? repo.partnerName : 'Connected',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: AppTheme.plum,
+                          Text(
+                            repo.partnerName.isNotEmpty ? repo.partnerName : 'Connected',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.plum,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -510,10 +519,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               style: TextButton.styleFrom(
                 backgroundColor: AppTheme.blush.withValues(alpha: 0.5),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               ),
             ),
           PopupMenuButton<String>(
+            padding: const EdgeInsets.only(right: 6),
             icon: const Icon(Icons.more_vert, color: AppTheme.plum),
             onSelected: (val) async {
               if (val == 'partner_info') {
