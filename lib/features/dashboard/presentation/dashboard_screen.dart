@@ -340,11 +340,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (!repo.isPaired) ...[
-            _buildConnectPartnerCard(context, repo),
-            const SizedBox(height: 18),
-          ],
-
           // Medical Disclaimer Notice Banner
           InkWell(
             onTap: () => MedicalDisclaimer.showDisclaimerDialog(context),
