@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:confetti/confetti.dart';
@@ -20,6 +21,7 @@ class SparkButton extends StatefulWidget {
 
 class _SparkButtonState extends State<SparkButton> {
   late ConfettiController _confettiController;
+  Timer? _countdownTimer;
   bool _previousMatch = false;
 
   @override
@@ -30,6 +32,9 @@ class _SparkButtonState extends State<SparkButton> {
     if (_previousMatch) {
       _confettiController.play();
     }
+    _countdownTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
@@ -43,8 +48,37 @@ class _SparkButtonState extends State<SparkButton> {
 
   @override
   void dispose() {
+    _countdownTimer?.cancel();
     _confettiController.dispose();
     super.dispose();
+  }
+
+  DateTime _getExpiryTime(DateTime now) {
+    if (now.hour >= 4 && now.hour < 16) {
+      return DateTime(now.year, now.month, now.day, 16, 0);
+    } else if (now.hour >= 16) {
+      final tomorrow = now.add(const Duration(days: 1));
+      return DateTime(tomorrow.year, tomorrow.month, tomorrow.day, 4, 0);
+    } else {
+      return DateTime(now.year, now.month, now.day, 4, 0);
+    }
+  }
+
+  String _formatRemainingTime(DateTime now, bool isMatch) {
+    final expiry = _getExpiryTime(now);
+    final diff = expiry.difference(now);
+    final hours = diff.inHours;
+    final minutes = diff.inMinutes % 60;
+    final targetTimeStr = (expiry.hour == 16) ? '4:00 PM' : '4:00 AM';
+    final remainingStr = hours > 0
+        ? '${hours}h ${minutes}m left'
+        : (minutes <= 1 ? '1m left' : '${minutes}m left');
+
+    if (isMatch) {
+      return 'Match active until $targetTimeStr ($remainingStr)';
+    } else {
+      return 'Light goes off at $targetTimeStr ($remainingStr)';
+    }
   }
 
   @override
@@ -205,6 +239,35 @@ class _SparkButtonState extends State<SparkButton> {
                   color: (isMatch || isLit) ? Colors.white : AppTheme.plum,
                 ),
               ),
+
+              // Expiry / Duration Badge (Active until 4:00 AM / 4:00 PM)
+              if (isLit || isMatch) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.22),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.timer_outlined, size: 14, color: Colors.white),
+                      const SizedBox(width: 6),
+                      Text(
+                        _formatRemainingTime(DateTime.now(), isMatch),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 6),
 
               // Explanation / Zero-Knowledge Guarantee
