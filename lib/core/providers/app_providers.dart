@@ -36,3 +36,8 @@ final coupleMemoriesProvider = Provider<List<CoupleMemory>>((ref) {
   final repo = ref.watch(coupleRepositoryProvider);
   return repo.memories;
 });
+
+final unreadMemoriesCountProvider = Provider<int>((ref) {
+  final repo = ref.watch(coupleRepositoryProvider);
+  return repo.unreadMemoriesCount;
+});

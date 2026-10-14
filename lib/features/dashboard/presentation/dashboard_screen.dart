@@ -125,6 +125,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   void _openMemoriesModal(BuildContext context) {
+    ref.read(coupleRepositoryProvider.notifier).markMemoriesAsRead();
     final memories = ref.read(coupleMemoriesProvider);
     showModalBottomSheet(
       context: context,
@@ -273,6 +274,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     CoupleRepository repo,
     MoodStatus mood,
     ScheduledIntimacy? nextDate,
+    int unreadCount,
   ) {
     return SingleChildScrollView(
       key: const PageStorageKey('sex_tab_scroll'),
@@ -338,23 +340,49 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               Container(
                                 padding: const EdgeInsets.all(7),
                                 decoration: BoxDecoration(
-                                  color: AppTheme.crimson.withValues(alpha: 0.1),
+                                  color: (unreadCount > 0 ? AppTheme.crimson : AppTheme.plum).withValues(alpha: 0.1),
                                   shape: BoxShape.circle,
                                 ),
-                                child: const Icon(Icons.mark_email_unread_rounded, size: 16, color: AppTheme.crimson),
+                                child: Icon(
+                                  unreadCount > 0 ? Icons.mark_email_unread_rounded : Icons.mail_outline_rounded,
+                                  size: 16,
+                                  color: unreadCount > 0 ? AppTheme.crimson : AppTheme.plum,
+                                ),
                               ),
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      'Spark & Memory Inbox (${ref.watch(coupleMemoriesProvider).length})',
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                        color: AppTheme.plum,
-                                      ),
+                                    Row(
+                                      children: [
+                                        const Text(
+                                          'Spark & Memory Inbox',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                            color: AppTheme.plum,
+                                          ),
+                                        ),
+                                        if (unreadCount > 0) ...[
+                                          const SizedBox(width: 6),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: AppTheme.crimson,
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                            child: Text(
+                                              '$unreadCount NEW',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 9,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
                                     ),
                                     Text(
                                       ref.watch(coupleMemoriesProvider).first.title,
@@ -479,7 +507,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final fertility = ref.watch(todayFertilityProvider);
     final mood = ref.watch(todayMoodStatusProvider);
     final scheduledDates = ref.watch(scheduledDatesProvider);
-    final memories = ref.watch(coupleMemoriesProvider);
+    final unreadCount = ref.watch(unreadMemoriesCountProvider);
     final nextDate = scheduledDates.isNotEmpty ? scheduledDates.first : null;
 
     if (repo.isPaired && repo.partnerName.isEmpty) {
@@ -527,13 +555,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           IconButton(
             tooltip: 'Memories & Spark Inbox',
             icon: Badge(
-              isLabelVisible: memories.isNotEmpty,
+              isLabelVisible: unreadCount > 0,
               label: Text(
-                '${memories.length}',
+                '$unreadCount',
                 style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
               ),
               backgroundColor: AppTheme.crimson,
-              child: const Icon(Icons.mark_email_unread_outlined, color: AppTheme.plum, size: 22),
+              child: Icon(
+                unreadCount > 0 ? Icons.mark_email_unread_rounded : Icons.mail_outline_rounded,
+                color: AppTheme.plum,
+                size: 22,
+              ),
             ),
             onPressed: () => _openMemoriesModal(context),
           ),
@@ -646,9 +678,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 value: 'memories',
                 child: Row(
                   children: [
-                    const Icon(Icons.mark_email_unread_outlined, size: 18, color: AppTheme.crimson),
+                    Icon(
+                      unreadCount > 0 ? Icons.mark_email_unread_rounded : Icons.mail_outline_rounded,
+                      size: 18,
+                      color: AppTheme.crimson,
+                    ),
                     const SizedBox(width: 8),
-                    Text('Memories Inbox (${memories.length})'),
+                    Text(unreadCount > 0 ? 'Memories Inbox ($unreadCount new)' : 'Memories Inbox'),
                   ],
                 ),
               ),
@@ -710,7 +746,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       ),
       body: SafeArea(
         child: !repo.tracksCycle
-            ? _buildSexTab(context, repo, mood, nextDate)
+            ? _buildSexTab(context, repo, mood, nextDate, unreadCount)
             : PageView(
                 controller: _pageController,
                 onPageChanged: (index) {
@@ -719,7 +755,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   });
                 },
                 children: [
-                  _buildSexTab(context, repo, mood, nextDate),
+                  _buildSexTab(context, repo, mood, nextDate, unreadCount),
                   _buildCycleTab(context, repo, fertility),
                 ],
               ),

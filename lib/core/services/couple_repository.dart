@@ -49,6 +49,8 @@ class CoupleRepository extends ChangeNotifier {
 
   // Couple Memories & Spark History
   final List<CoupleMemory> _memories = [];
+  final Set<String> _readMemoryIds = {};
+  DateTime? _lastViewedMemoriesAt;
 
   RealtimeChannel? _realtimeChannel;
 
@@ -101,6 +103,16 @@ class CoupleRepository extends ChangeNotifier {
   int get safetyBufferDays => _safetyBufferDays;
   List<ScheduledIntimacy> get scheduledDates => List.unmodifiable(_scheduledDates);
   List<CoupleMemory> get memories => List.unmodifiable(_memories);
+  int get unreadMemoriesCount => _memories.where((m) => !_readMemoryIds.contains(m.id)).length;
+  bool isMemoryRead(String id) => _readMemoryIds.contains(id);
+
+  Future<void> markMemoriesAsRead() async {
+    if (_memories.isEmpty) return;
+    _readMemoryIds.addAll(_memories.map((m) => m.id));
+    _lastViewedMemoriesAt = DateTime.now();
+    await _saveToStorage();
+    notifyListeners();
+  }
 
   CoupleRepository() {
     _initAuthListener();
@@ -646,6 +658,17 @@ class CoupleRepository extends ChangeNotifier {
             _memories.add(CoupleMemory.fromJson(item as Map<String, dynamic>));
           }
         }
+
+        if (data['readMemoryIds'] != null) {
+          final rawIds = data['readMemoryIds'] as List<dynamic>;
+          _readMemoryIds.clear();
+          for (final id in rawIds) {
+            _readMemoryIds.add(id.toString());
+          }
+        }
+        if (data['lastViewedMemoriesAt'] != null) {
+          _lastViewedMemoriesAt = DateTime.tryParse(data['lastViewedMemoriesAt'] as String);
+        }
         notifyListeners();
       }
     } catch (e) {
@@ -682,6 +705,8 @@ class CoupleRepository extends ChangeNotifier {
         'moodSignals': _moodSignals,
         'scheduledDates': _scheduledDates.map((e) => e.toJson()).toList(),
         'memories': _memories.map((e) => e.toJson()).toList(),
+        'readMemoryIds': _readMemoryIds.toList(),
+        'lastViewedMemoriesAt': _lastViewedMemoriesAt?.toIso8601String(),
       };
       await prefs.setString(_kPrefKey, jsonEncode(data));
     } catch (e) {
@@ -1239,6 +1264,8 @@ class CoupleRepository extends ChangeNotifier {
     _moodSignals.clear();
     _scheduledDates.clear();
     _memories.clear();
+    _readMemoryIds.clear();
+    _lastViewedMemoriesAt = null;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kPrefKey);
     notifyListeners();
@@ -1423,6 +1450,8 @@ class CoupleRepository extends ChangeNotifier {
     _moodSignals.clear();
     _scheduledDates.clear();
     _memories.clear();
+    _readMemoryIds.clear();
+    _lastViewedMemoriesAt = null;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kPrefKey);
     notifyListeners();
