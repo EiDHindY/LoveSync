@@ -15,6 +15,7 @@ import 'package:love_app/features/pairing/presentation/pairing_modal.dart';
 import 'package:love_app/features/pairing/presentation/partner_info_modal.dart';
 import 'package:love_app/features/scheduling/domain/scheduled_intimacy.dart';
 import 'package:love_app/features/scheduling/presentation/schedule_date_modal.dart';
+import 'package:love_app/features/scheduling/presentation/widgets/scheduled_date_card.dart';
 import 'package:love_app/features/onboarding/presentation/create_profile_screen.dart';
 import 'package:love_app/features/memories/presentation/memories_inbox_modal.dart';
 
@@ -487,6 +488,25 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         ),
                       ),
                     ],
+
+                    const SizedBox(height: 20),
+
+                    // Schedule a Date / Upcoming Date Night Option
+                    ScheduledDateCard(
+                      dateItem: nextDate,
+                      currentUserId: repo.currentUserId,
+                      lastPeriodStartDate: repo.lastPeriodStartDate,
+                      cycleLength: repo.cycleLength,
+                      periodLength: repo.periodLength,
+                      safetyBufferDays: repo.safetyBufferDays,
+                      onOpenScheduleModal: () => _openScheduleModal(context),
+                      onRespond: (id, status) {
+                        ref.read(coupleRepositoryProvider.notifier).respondToDate(id, status);
+                      },
+                      onRespondVibeCheck: (id, status) {
+                        ref.read(coupleRepositoryProvider.notifier).respondVibeCheck(id, status);
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -850,30 +870,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       ),
       bottomNavigationBar: repo.tracksCycle
           ? NavigationBar(
-              selectedIndex: _currentIndex.clamp(0, 3),
+              selectedIndex: _currentIndex.clamp(0, 1),
               onDestinationSelected: (index) {
-                if (index == 0) {
-                  setState(() => _currentIndex = 0);
-                  if (_pageController.hasClients) {
-                    _pageController.animateToPage(
-                      0,
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeInOut,
-                    );
-                  }
-                } else if (index == 1) {
-                  setState(() => _currentIndex = 1);
-                  if (_pageController.hasClients) {
-                    _pageController.animateToPage(
-                      1,
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeInOut,
-                    );
-                  }
-                } else if (index == 2) {
-                  _openScheduleModal(context);
-                } else if (index == 3) {
-                  _openMemoriesModal(context);
+                setState(() => _currentIndex = index);
+                if (_pageController.hasClients) {
+                  _pageController.animateToPage(
+                    index,
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                  );
                 }
               },
               destinations: const [
@@ -886,16 +891,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   icon: Icon(Icons.spa_outlined),
                   selectedIcon: Icon(Icons.spa_rounded, color: AppTheme.crimson),
                   label: 'Cycle & Period',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.wine_bar_outlined),
-                  selectedIcon: Icon(Icons.wine_bar_rounded, color: AppTheme.crimson),
-                  label: 'Date Night',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.collections_bookmark_outlined),
-                  selectedIcon: Icon(Icons.collections_bookmark_rounded, color: AppTheme.crimson),
-                  label: 'Memories',
                 ),
               ],
             )

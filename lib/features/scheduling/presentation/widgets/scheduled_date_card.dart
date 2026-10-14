@@ -45,7 +45,7 @@ class ScheduledDateCard extends StatelessWidget {
       case FertilityPhase.menstruating:
         return 'Menstrual Cycle Active · Comfort & Pampering';
       case FertilityPhase.unknown:
-        return 'Romantic Sanctuary · Intimate Moments';
+        return 'Romantic Intimacy · Low-Pressure Evening';
     }
   }
 
@@ -54,27 +54,28 @@ class ScheduledDateCard extends StatelessWidget {
     if (dateItem == null) {
       return Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(22),
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(color: AppTheme.blush, width: 1.5),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF2C0E28).withValues(alpha: 0.04),
-              blurRadius: 16,
+              color: const Color(0xFF2C0E28).withValues(alpha: 0.03),
+              blurRadius: 14,
               offset: const Offset(0, 4),
             ),
           ],
         ),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: const [
-                Icon(Icons.wine_bar_rounded, color: AppTheme.crimson, size: 18),
+                Icon(Icons.calendar_month_rounded, color: AppTheme.crimson, size: 18),
                 SizedBox(width: 8),
                 Text(
-                  'SPECIAL PROPOSAL',
+                  'DATE NIGHT & INTIMACY',
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w800,
@@ -84,27 +85,32 @@ class ScheduledDateCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
             const Text(
-              'No upcoming intimacy date scheduled.',
-              style: TextStyle(fontSize: 14, color: AppTheme.plum, fontWeight: FontWeight.w500),
+              'No upcoming date scheduled',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.plum,
+              ),
             ),
             const SizedBox(height: 4),
             Text(
-              'Surprise your partner with a romantic candlelit evening.',
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              'Plan a low-pressure evening synced with your partner\'s natural cycle bio-rhythms.',
+              style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600, height: 1.35),
             ),
             const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: onOpenScheduleModal,
-                icon: const Icon(Icons.calendar_month, size: 18),
-                label: const Text('Plan Date Night'),
+                icon: const Icon(Icons.add_rounded, size: 18),
+                label: const Text('Schedule a Date', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.deepBerry,
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                  elevation: 1,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                   padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
               ),
@@ -141,25 +147,25 @@ class ScheduledDateCard extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF2C0E28).withValues(alpha: 0.05),
-            blurRadius: 18,
-            offset: const Offset(0, 6),
+            color: const Color(0xFF2C0E28).withValues(alpha: 0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header: Category Tag & Embedded Cycle Safety Tag
+          // Header
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(
                 children: const [
-                  Icon(Icons.wine_bar_rounded, size: 18, color: AppTheme.crimson),
-                  SizedBox(width: 6),
+                  Icon(Icons.calendar_month_rounded, size: 18, color: AppTheme.crimson),
+                  SizedBox(width: 8),
                   Text(
-                    'SPECIAL PROPOSAL',
+                    'DATE NIGHT INVITATION',
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w800,
@@ -169,184 +175,62 @@ class ScheduledDateCard extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(width: 8),
-              // Embedded Cycle Safety Pill
-              Flexible(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: fertility.bgColor,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: fertility.color.withValues(alpha: 0.3)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 7,
-                        height: 7,
-                        decoration: BoxDecoration(
-                          color: fertility.color,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Flexible(
-                        child: Text(
-                          fertility.dayOfCycle != null
-                              ? '${fertility.title} (Day ${fertility.dayOfCycle})'
-                              : fertility.title,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w700,
-                            color: fertility.color,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              _buildStatusPill(date.status),
             ],
           ),
           const SizedBox(height: 12),
 
-          // Title
-          const Text(
-            'Candlelight Dinner & Rooftop Drinks',
-            style: TextStyle(
+          // Date and Time
+          Text(
+            dateFormatted,
+            style: const TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
               color: AppTheme.plum,
-              letterSpacing: -0.2,
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 10),
 
-          // Date & Time
-          Row(
-            children: [
-              Icon(Icons.calendar_today_rounded, size: 15, color: Colors.grey.shade600),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  dateFormatted,
-                  style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-
-          // Location
-          Row(
-            children: [
-              Icon(Icons.location_on_rounded, size: 15, color: Colors.grey.shade600),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  'L\'Aura Sky Lounge · Intimate Corner Table',
-                  style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          // Atmospheric Photo Preview with Overlay
+          // Cycle Safety / Bio-rhythm Pill
           Container(
-            width: double.infinity,
-            height: 124,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
+              color: fertility.bgColor,
               borderRadius: BorderRadius.circular(16),
-              gradient: const LinearGradient(
-                colors: [Color(0xFF4A0025), Color(0xFF6B113B), Color(0xFF2C0E28)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.1),
-                  blurRadius: 8,
-                  offset: const Offset(0, 3),
-                ),
-              ],
+              border: Border.all(color: fertility.color.withValues(alpha: 0.3)),
             ),
-            child: Stack(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                // Soft candle bokeh glow illustration
-                Positioned.fill(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        gradient: RadialGradient(
-                          center: const Alignment(0.6, -0.2),
-                          radius: 1.1,
-                          colors: [
-                            const Color(0xFFFFB0C9).withValues(alpha: 0.4),
-                            Colors.transparent,
-                          ],
-                        ),
-                      ),
-                    ),
+                Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    color: fertility.color,
+                    shape: BoxShape.circle,
                   ),
                 ),
-                Positioned(
-                  top: 12,
-                  left: 12,
-                  child: Row(
-                    children: const [
-                      Icon(Icons.auto_awesome, color: AppTheme.primaryFixed, size: 16),
-                      SizedBox(width: 6),
-                      Text(
-                        'Romantic Sanctuary',
-                        style: TextStyle(
-                          color: AppTheme.primaryFixed,
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Positioned(
-                  bottom: 10,
-                  left: 12,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.35),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Icon(Icons.deck_outlined, size: 13, color: AppTheme.primaryFixed),
-                        SizedBox(width: 5),
-                        Text(
-                          'Corner Table Reserved · Ambient Jazz',
-                          style: TextStyle(
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    fertility.dayOfCycle != null
+                        ? '${fertility.title} (Day ${fertility.dayOfCycle})'
+                        : fertility.title,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: fertility.color,
                     ),
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
 
-          // Bio-Rhythm Intimacy Insight Note
+          // Bio-rhythm insight
           Container(
-            width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
               color: AppTheme.surfaceContainerLow,
@@ -443,6 +327,12 @@ class ScheduledDateCard extends StatelessWidget {
               ),
             ),
           ] else if (date.status == IntimacyStatus.pending && !isOwner) ...[
+            // Guilt-Free Response Actions
+            const Text(
+              'Your partner proposed this date. How are you feeling?',
+              style: TextStyle(fontSize: 12.5, color: Color(0xFF555555)),
+            ),
+            const SizedBox(height: 10),
             Row(
               children: [
                 Expanded(
@@ -450,13 +340,13 @@ class ScheduledDateCard extends StatelessWidget {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.crimson,
                       foregroundColor: Colors.white,
-                      elevation: 2,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                      elevation: 1,
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                     ),
                     onPressed: () => onRespond(date.id, IntimacyStatus.accepted),
                     icon: const Icon(Icons.celebration_rounded, size: 16),
-                    label: const Text('Accept Date', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                    label: const Text('Accept Date', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold)),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -465,31 +355,38 @@ class ScheduledDateCard extends StatelessWidget {
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppTheme.plum,
                       side: const BorderSide(color: AppTheme.roseGold),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                     ),
                     onPressed: () => onRespond(date.id, IntimacyStatus.rainchecked),
-                    child: const Text('Raincheck 🍿', style: TextStyle(fontSize: 13)),
+                    child: const Text('Raincheck 🍿', style: TextStyle(fontSize: 12.5)),
                   ),
                 ),
               ],
             ),
-          ] else ...[
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _buildStatusPill(date.status),
-                TextButton.icon(
-                  onPressed: onOpenScheduleModal,
-                  icon: const Icon(Icons.edit_calendar_rounded, size: 15, color: AppTheme.deepBerry),
-                  label: const Text(
-                    'Plan Another Date',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.deepBerry),
-                  ),
-                ),
-              ],
+          ] else if (date.status == IntimacyStatus.pending && isOwner) ...[
+            const Text(
+              'Invitation sent to your partner. Awaiting their response...',
+              style: TextStyle(fontSize: 12.5, fontStyle: FontStyle.italic, color: Colors.grey),
+            ),
+          ] else if (date.status == IntimacyStatus.rainchecked) ...[
+            const Text(
+              'Raincheck accepted: Soft cuddle or relaxing movie night planned instead! 🍿',
+              style: TextStyle(fontSize: 12.5, color: AppTheme.deepBerry, fontWeight: FontWeight.w600),
             ),
           ],
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: onOpenScheduleModal,
+              icon: const Icon(Icons.edit_calendar_rounded, size: 15, color: AppTheme.deepBerry),
+              label: const Text(
+                'Plan Another Date',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.deepBerry),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -528,7 +425,7 @@ class ScheduledDateCard extends StatelessWidget {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(14),
