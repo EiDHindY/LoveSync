@@ -37,7 +37,7 @@ void main() {
       expect(repo.scheduledDates.first.status, equals(IntimacyStatus.accepted));
       expect(repo.memories.length, equals(1));
       expect(repo.memories.first.type, equals('date_night'));
-      expect(repo.memories.first.title, equals('Date Night Confirmed! 🥂'));
+      expect(repo.memories.first.title, equals('Date Night Confirmed! ✨'));
       expect(repo.unreadMemoriesCount, equals(1));
     });
 

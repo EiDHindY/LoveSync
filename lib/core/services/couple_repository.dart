@@ -102,7 +102,27 @@ class CoupleRepository extends ChangeNotifier {
   int get cycleLength => _cycleLength;
   int get periodLength => _periodLength;
   int get safetyBufferDays => _safetyBufferDays;
-  List<ScheduledIntimacy> get scheduledDates => List.unmodifiable(_scheduledDates);
+  List<ScheduledIntimacy> get scheduledDates {
+    autoClosePastDates(notify: false);
+    return List.unmodifiable(_scheduledDates);
+  }
+
+  bool autoClosePastDates({bool notify = true}) {
+    final now = DateTime.now();
+    bool changed = false;
+    for (int i = 0; i < _scheduledDates.length; i++) {
+      final date = _scheduledDates[i];
+      if (date.status != IntimacyStatus.completed && date.scheduledAt.isBefore(now)) {
+        _scheduledDates[i] = date.copyWith(status: IntimacyStatus.completed);
+        changed = true;
+      }
+    }
+    if (changed) {
+      _saveToStorage();
+      if (notify) notifyListeners();
+    }
+    return changed;
+  }
   List<CoupleMemory> get memories => List.unmodifiable(_memories);
   int get unreadMemoriesCount => _memories.where((m) => !_readMemoryIds.contains(m.id)).length;
   bool isMemoryRead(String id) => _readMemoryIds.contains(id);
@@ -626,7 +646,7 @@ class CoupleRepository extends ChangeNotifier {
                 final isAccepted = statusStr == 'accepted';
                 NotificationService().showNotification(
                   id: 3,
-                  title: isAccepted ? 'Date Night Accepted! 🥂' : 'Date Night Update ✨',
+                  title: isAccepted ? 'Date Night Accepted! ✨' : 'Date Night Update ✨',
                   body: isAccepted
                       ? '$senderName accepted your date proposal!'
                       : '$senderName responded: $statusStr',
@@ -725,7 +745,7 @@ class CoupleRepository extends ChangeNotifier {
             coupleId: _coupleId,
             createdBy: date.proposedBy,
             type: 'date_night',
-            title: 'Date Night Confirmed! 🥂',
+            title: 'Date Night Confirmed! ✨',
             description: 'Date scheduled with $partnerDisplay for $formattedDate.',
             windowKey: windowKey,
             createdAt: date.createdAt,
@@ -1144,7 +1164,7 @@ class CoupleRepository extends ChangeNotifier {
           coupleId: _coupleId,
           createdBy: _currentUserId,
           type: 'date_night',
-          title: 'Date Night Confirmed! 🥂',
+          title: 'Date Night Confirmed! ✨',
           description: 'Date scheduled with $partnerDisplay for $formattedDate.',
           windowKey: windowKey,
           createdAt: DateTime.now(),

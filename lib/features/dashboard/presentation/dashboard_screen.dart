@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:love_app/core/constants/medical_disclaimer.dart';
@@ -29,15 +30,23 @@ class DashboardScreen extends ConsumerStatefulWidget {
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   int _currentIndex = 0;
   late final PageController _pageController;
+  Timer? _autoCloseTimer;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController();
+    _autoCloseTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (mounted) {
+        ref.read(coupleRepositoryProvider.notifier).autoClosePastDates();
+        setState(() {});
+      }
+    });
   }
 
   @override
   void dispose() {
+    _autoCloseTimer?.cancel();
     _pageController.dispose();
     super.dispose();
   }
@@ -357,7 +366,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 1. Double-Blind Mood Matching ("The Spark") with Stitch styling
+                    // ══════════════════════════════════════════════════════
+                    // SECTION 1: SPARK
+                    // ══════════════════════════════════════════════════════
+                    _buildSectionHeader(
+                      title: 'THE SPARK',
+                      subtitle: 'Zero-pressure double-blind mood alignment',
+                      icon: Icons.local_fire_department_rounded,
+                    ),
+                    const SizedBox(height: 10),
                     SparkButton(
                       moodStatus: mood,
                       partnerName: repo.partnerName,
@@ -371,97 +388,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       },
                     ),
 
-                    if (ref.watch(coupleMemoriesProvider).isNotEmpty) ...[
-                      const SizedBox(height: 16),
-                      InkWell(
-                        onTap: () => _openMemoriesModal(context),
-                        borderRadius: BorderRadius.circular(16),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: AppTheme.blush, width: 1.2),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.02),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: (unreadCount > 0 ? AppTheme.crimson : AppTheme.plum).withValues(alpha: 0.1),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  unreadCount > 0 ? Icons.mark_email_unread_rounded : Icons.mail_outline_rounded,
-                                  size: 18,
-                                  color: unreadCount > 0 ? AppTheme.crimson : AppTheme.plum,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        const Text(
-                                          'Spark & Memory Inbox',
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.bold,
-                                            color: AppTheme.plum,
-                                          ),
-                                        ),
-                                        if (unreadCount > 0) ...[
-                                          const SizedBox(width: 6),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                            decoration: BoxDecoration(
-                                              color: AppTheme.crimson,
-                                              borderRadius: BorderRadius.circular(8),
-                                            ),
-                                            child: Text(
-                                              '$unreadCount NEW',
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 9,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ],
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      ref.watch(coupleMemoriesProvider).first.title,
-                                      style: TextStyle(
-                                        fontSize: 11.5,
-                                        color: Colors.grey.shade600,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const Icon(Icons.chevron_right_rounded, color: Colors.grey, size: 20),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
+                    const SizedBox(height: 24),
 
-                    const SizedBox(height: 20),
-
-                    // Schedule a Date / Upcoming Date Night Option
+                    // ══════════════════════════════════════════════════════
+                    // SECTION 2: DATE NIGHT
+                    // ══════════════════════════════════════════════════════
+                    _buildSectionHeader(
+                      title: 'DATE NIGHT',
+                      subtitle: 'Cycle bio-rhythm aligned romance',
+                      icon: Icons.event_available_rounded,
+                    ),
+                    const SizedBox(height: 10),
                     ScheduledDateCard(
                       dateItem: nextDate,
                       currentUserId: repo.currentUserId,
@@ -477,6 +414,32 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         ref.read(coupleRepositoryProvider.notifier).respondVibeCheck(id, status);
                       },
                     ),
+
+                    const SizedBox(height: 24),
+
+                    // ══════════════════════════════════════════════════════
+                    // SECTION 3: MEMORIES & MOMENTS
+                    // ══════════════════════════════════════════════════════
+                    _buildSectionHeader(
+                      title: 'MEMORIES',
+                      subtitle: 'Shared intimacy timeline & celebrated sparks',
+                      icon: Icons.favorite_rounded,
+                      badgeText: unreadCount > 0 ? '$unreadCount NEW' : null,
+                      trailingAction: TextButton.icon(
+                        onPressed: () => _openMemoriesModal(context),
+                        icon: const Icon(Icons.inbox_rounded, size: 15, color: AppTheme.crimson),
+                        label: const Text(
+                          'View All',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.crimson,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    _buildMemoriesSection(context, ref, unreadCount),
                   ],
                 ),
               ),
@@ -485,6 +448,236 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
           const SizedBox(height: 30),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    String? badgeText,
+    Widget? trailingAction,
+  }) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: AppTheme.crimson.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 14, color: AppTheme.crimson),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.0,
+                              color: AppTheme.crimson,
+                            ),
+                          ),
+                        ),
+                        if (badgeText != null) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppTheme.crimson,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              badgeText,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (trailingAction != null) ...[
+          const SizedBox(width: 8),
+          trailingAction,
+        ],
+      ],
+    );
+  }
+
+  Widget _buildMemoriesSection(BuildContext context, WidgetRef ref, int unreadCount) {
+    final memories = ref.watch(coupleMemoriesProvider);
+
+    if (memories.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppTheme.blush, width: 1.2),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: const BoxDecoration(
+                color: AppTheme.surfaceContainerHigh,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.auto_awesome_rounded, size: 20, color: AppTheme.plum),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'No memories documented yet',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppTheme.plum),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Lit sparks and confirmed dates will be saved here.',
+                    style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final latestMemory = memories.first;
+    return InkWell(
+      onTap: () => _openMemoriesModal(context),
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: unreadCount > 0 ? AppTheme.roseGold : AppTheme.blush,
+            width: 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: (unreadCount > 0 ? AppTheme.crimson : AppTheme.plum).withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                unreadCount > 0 ? Icons.mark_email_unread_rounded : Icons.mail_outline_rounded,
+                size: 20,
+                color: unreadCount > 0 ? AppTheme.crimson : AppTheme.plum,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          latestMemory.title,
+                          style: const TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.plum,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (unreadCount > 0) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppTheme.crimson,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            '$unreadCount NEW',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    latestMemory.description,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: Colors.grey.shade600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(Icons.chevron_right_rounded, color: Colors.grey, size: 22),
+          ],
+        ),
       ),
     );
   }
@@ -568,13 +761,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     ScheduledIntimacy? nextDate;
     if (scheduledDates.isNotEmpty) {
       final upcoming = scheduledDates
-          .where((d) => d.scheduledAt.isAfter(now.subtract(const Duration(hours: 4))))
+          .where((d) => !d.scheduledAt.isBefore(now) && d.status != IntimacyStatus.completed && d.status != IntimacyStatus.rainchecked)
           .toList();
       if (upcoming.isNotEmpty) {
         upcoming.sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
         nextDate = upcoming.first;
-      } else {
-        nextDate = scheduledDates.first;
       }
     }
 

@@ -45,7 +45,7 @@ class ScheduledDateCard extends StatelessWidget {
       case FertilityPhase.menstruating:
         return 'Menstrual Cycle Active · Comfort & Pampering';
       case FertilityPhase.unknown:
-        return 'Romantic Intimacy · Low-Pressure Evening';
+        return 'Romantic Intimacy';
     }
   }
 
@@ -96,7 +96,7 @@ class ScheduledDateCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              'Plan a low-pressure evening synced with your partner\'s natural cycle bio-rhythms.',
+              'Plan an evening synced with your partner\'s natural cycle bio-rhythms.',
               style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600, height: 1.35),
             ),
             const SizedBox(height: 16),
@@ -125,6 +125,7 @@ class ScheduledDateCard extends StatelessWidget {
     final isOwner = date.proposedBy == currentUserId;
     final isDateToday = _isToday(date.scheduledAt);
     final isDatePast = date.scheduledAt.isBefore(DateTime.now());
+    final isAccepted = date.status == IntimacyStatus.accepted;
 
     final fertility = CycleEngine.calculateFertility(
       targetDate: date.scheduledAt,
@@ -138,19 +139,31 @@ class ScheduledDateCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isAccepted ? null : Colors.white,
+        gradient: isAccepted
+            ? const LinearGradient(
+                colors: [
+                  Color(0xFF6B113B),
+                  Color(0xFFB61D46),
+                  Color(0xFF4A0025),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              )
+            : null,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: date.status == IntimacyStatus.accepted
-              ? AppTheme.roseGold.withValues(alpha: 0.6)
+          color: isAccepted
+              ? Colors.white.withValues(alpha: 0.25)
               : AppTheme.blush,
           width: 1.5,
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF2C0E28).withValues(alpha: 0.04),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
+            color: (isAccepted ? const Color(0xFF6B113B) : const Color(0xFF2C0E28))
+                .withValues(alpha: isAccepted ? 0.35 : 0.04),
+            blurRadius: isAccepted ? 24 : 16,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
@@ -162,21 +175,25 @@ class ScheduledDateCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(
-                children: const [
-                  Icon(Icons.calendar_month_rounded, size: 18, color: AppTheme.crimson),
-                  SizedBox(width: 8),
+                children: [
+                  Icon(
+                    Icons.calendar_month_rounded,
+                    size: 18,
+                    color: isAccepted ? AppTheme.primaryFixed : AppTheme.crimson,
+                  ),
+                  const SizedBox(width: 8),
                   Text(
                     'DATE NIGHT INVITATION',
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 1.1,
-                      color: AppTheme.crimson,
+                      color: isAccepted ? AppTheme.primaryFixed : AppTheme.crimson,
                     ),
                   ),
                 ],
               ),
-              _buildStatusPill(date.status),
+              _buildStatusPill(date.status, isAccepted: isAccepted),
             ],
           ),
           const SizedBox(height: 12),
@@ -184,10 +201,10 @@ class ScheduledDateCard extends StatelessWidget {
           // Date and Time
           Text(
             dateFormatted,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: AppTheme.plum,
+              color: isAccepted ? Colors.white : AppTheme.plum,
             ),
           ),
           const SizedBox(height: 8),
@@ -202,14 +219,14 @@ class ScheduledDateCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: isDatePast
-                      ? Colors.grey.shade100
-                      : const Color(0xFFFFF0F5),
+                  color: isAccepted
+                      ? Colors.white.withValues(alpha: 0.18)
+                      : (isDatePast ? Colors.grey.shade100 : const Color(0xFFFFF0F5)),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: isDatePast
-                        ? Colors.grey.shade300
-                        : AppTheme.crimson.withValues(alpha: 0.35),
+                    color: isAccepted
+                        ? Colors.white.withValues(alpha: 0.35)
+                        : (isDatePast ? Colors.grey.shade300 : AppTheme.crimson.withValues(alpha: 0.35)),
                   ),
                 ),
                 child: Row(
@@ -218,7 +235,9 @@ class ScheduledDateCard extends StatelessWidget {
                     Icon(
                       Icons.hourglass_top_rounded,
                       size: 13,
-                      color: isDatePast ? Colors.grey.shade600 : AppTheme.crimson,
+                      color: isAccepted
+                          ? Colors.white
+                          : (isDatePast ? Colors.grey.shade600 : AppTheme.crimson),
                     ),
                     const SizedBox(width: 5),
                     Text(
@@ -226,7 +245,9 @@ class ScheduledDateCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
-                        color: isDatePast ? Colors.grey.shade700 : AppTheme.crimson,
+                        color: isAccepted
+                            ? Colors.white
+                            : (isDatePast ? Colors.grey.shade700 : AppTheme.crimson),
                       ),
                     ),
                   ],
@@ -237,9 +258,15 @@ class ScheduledDateCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: fertility.bgColor,
+                  color: isAccepted
+                      ? Colors.white.withValues(alpha: 0.18)
+                      : fertility.bgColor,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: fertility.color.withValues(alpha: 0.3)),
+                  border: Border.all(
+                    color: isAccepted
+                        ? Colors.white.withValues(alpha: 0.35)
+                        : fertility.color.withValues(alpha: 0.3),
+                  ),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -248,7 +275,7 @@ class ScheduledDateCard extends StatelessWidget {
                       width: 7,
                       height: 7,
                       decoration: BoxDecoration(
-                        color: fertility.color,
+                        color: isAccepted ? AppTheme.primaryFixed : fertility.color,
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -262,7 +289,7 @@ class ScheduledDateCard extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
-                          color: fertility.color,
+                          color: isAccepted ? Colors.white : fertility.color,
                         ),
                       ),
                     ),
@@ -277,21 +304,31 @@ class ScheduledDateCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: AppTheme.surfaceContainerLow,
+              color: isAccepted
+                  ? Colors.white.withValues(alpha: 0.12)
+                  : AppTheme.surfaceContainerLow,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppTheme.blush),
+              border: Border.all(
+                color: isAccepted
+                    ? Colors.white.withValues(alpha: 0.22)
+                    : AppTheme.blush,
+              ),
             ),
             child: Row(
               children: [
-                const Icon(Icons.spa_rounded, size: 15, color: AppTheme.crimson),
+                Icon(
+                  Icons.spa_rounded,
+                  size: 15,
+                  color: isAccepted ? AppTheme.primaryFixed : AppTheme.crimson,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     _getBioRhythmInsight(fertility),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 11.5,
                       fontWeight: FontWeight.w600,
-                      color: AppTheme.deepBerry,
+                      color: isAccepted ? Colors.white.withValues(alpha: 0.95) : AppTheme.deepBerry,
                     ),
                   ),
                 ),
@@ -301,42 +338,42 @@ class ScheduledDateCard extends StatelessWidget {
           const SizedBox(height: 14),
 
           // Actions
-          if (isDateToday && date.status == IntimacyStatus.accepted) ...[
+          if (isDateToday && isAccepted) ...[
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppTheme.blush.withValues(alpha: 0.4),
+                color: Colors.white.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppTheme.roseGold.withValues(alpha: 0.5)),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: const [
-                      Icon(Icons.celebration_rounded, size: 16, color: AppTheme.crimson),
+                      Icon(Icons.celebration_rounded, size: 16, color: AppTheme.primaryFixed),
                       SizedBox(width: 6),
                       Text(
                         'Gentle Day-Of Vibe Check',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.plum),
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
                       ),
                     ],
                   ),
                   const SizedBox(height: 4),
-                  const Text(
+                  Text(
                     "Date is tonight! Still feeling the spark, or exhausted from the day?",
-                    style: TextStyle(fontSize: 11.5, color: Color(0xFF444444)),
+                    style: TextStyle(fontSize: 11.5, color: Colors.white.withValues(alpha: 0.9)),
                   ),
                   const SizedBox(height: 8),
                   if (date.vibeCheckStatus == VibeCheckStatus.confirmed)
                     const Text(
                       '✨ Confirmed! Looking forward to tonight 🔥',
-                      style: TextStyle(color: AppTheme.crimson, fontWeight: FontWeight.bold, fontSize: 12),
+                      style: TextStyle(color: AppTheme.primaryFixed, fontWeight: FontWeight.bold, fontSize: 12),
                     )
                   else if (date.vibeCheckStatus == VibeCheckStatus.convertedCuddle)
                     const Text(
                       '🫂 Soft evening planned: Warm cuddles & movie night instead!',
-                      style: TextStyle(color: AppTheme.deepBerry, fontWeight: FontWeight.bold, fontSize: 12),
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
                     )
                   else
                     Row(
@@ -344,7 +381,8 @@ class ScheduledDateCard extends StatelessWidget {
                         Expanded(
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTheme.crimson,
+                              backgroundColor: Colors.white,
+                              foregroundColor: AppTheme.crimson,
                               padding: const EdgeInsets.symmetric(vertical: 8),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
                             ),
@@ -356,8 +394,8 @@ class ScheduledDateCard extends StatelessWidget {
                         Expanded(
                           child: OutlinedButton(
                             style: OutlinedButton.styleFrom(
-                              foregroundColor: AppTheme.deepBerry,
-                              side: const BorderSide(color: AppTheme.roseGold),
+                              foregroundColor: Colors.white,
+                              side: BorderSide(color: Colors.white.withValues(alpha: 0.6)),
                               padding: const EdgeInsets.symmetric(vertical: 8),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
                             ),
@@ -424,10 +462,18 @@ class ScheduledDateCard extends StatelessWidget {
             alignment: Alignment.centerRight,
             child: TextButton.icon(
               onPressed: onOpenScheduleModal,
-              icon: const Icon(Icons.edit_calendar_rounded, size: 15, color: AppTheme.deepBerry),
-              label: const Text(
+              icon: Icon(
+                Icons.edit_calendar_rounded,
+                size: 15,
+                color: isAccepted ? Colors.white.withValues(alpha: 0.9) : AppTheme.deepBerry,
+              ),
+              label: Text(
                 'Plan Another Date',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.deepBerry),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: isAccepted ? Colors.white.withValues(alpha: 0.9) : AppTheme.deepBerry,
+                ),
               ),
             ),
           ),
@@ -436,7 +482,22 @@ class ScheduledDateCard extends StatelessWidget {
     );
   }
 
-  Widget _buildStatusPill(IntimacyStatus status) {
+  Widget _buildStatusPill(IntimacyStatus status, {bool isAccepted = false}) {
+    if (isAccepted) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.22),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+        ),
+        child: const Text(
+          'ACCEPTED',
+          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white),
+        ),
+      );
+    }
+
     Color bg;
     Color text;
     String label;
@@ -444,7 +505,7 @@ class ScheduledDateCard extends StatelessWidget {
       case IntimacyStatus.accepted:
         bg = AppTheme.safeGreenBg;
         text = AppTheme.safeGreen;
-        label = 'ACCEPTED 🥂';
+        label = 'ACCEPTED';
         break;
       case IntimacyStatus.pending:
         bg = AppTheme.cautionAmberBg;

@@ -202,7 +202,7 @@ class MemoriesInboxModal extends StatelessWidget {
                                     : isMatch
                                         ? '🔥'
                                         : isDate
-                                            ? '🥂'
+                                            ? '📅'
                                             : '💕',
                                 style: const TextStyle(fontSize: 20),
                               ),
