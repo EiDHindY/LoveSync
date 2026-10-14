@@ -15,7 +15,6 @@ import 'package:love_app/features/pairing/presentation/pairing_modal.dart';
 import 'package:love_app/features/pairing/presentation/partner_info_modal.dart';
 import 'package:love_app/features/scheduling/domain/scheduled_intimacy.dart';
 import 'package:love_app/features/scheduling/presentation/schedule_date_modal.dart';
-import 'package:love_app/features/scheduling/presentation/widgets/scheduled_date_card.dart';
 import 'package:love_app/features/onboarding/presentation/create_profile_screen.dart';
 import 'package:love_app/features/memories/presentation/memories_inbox_modal.dart';
 
@@ -280,196 +279,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     }
   }
 
-  Widget _buildDailyPromptCard(BuildContext context, CoupleRepository repo) {
-    final partnerName = repo.partnerName.isNotEmpty ? repo.partnerName : 'Partner';
-
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(top: 18),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: LinearGradient(
-          colors: [
-            Colors.white,
-            AppTheme.surfaceContainerLow.withValues(alpha: 0.6),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        border: Border.all(color: AppTheme.blush, width: 1.2),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF2C0E28).withValues(alpha: 0.03),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Row(
-                  children: const [
-                    Icon(Icons.psychology_rounded, size: 18, color: AppTheme.secondaryContainer),
-                    SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        'DAILY SPARK QUESTION',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.8,
-                          color: AppTheme.deepBerry,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: AppTheme.surfaceContainer,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '$partnerName answered ✓',
-                    style: const TextStyle(
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.deepBerry,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            '“What is one touch or gesture from this week that made you feel most desired?”',
-            style: TextStyle(
-              fontSize: 14.5,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.plum,
-              height: 1.35,
-            ),
-          ),
-          const SizedBox(height: 14),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Row(
-                  children: const [
-                    Icon(Icons.visibility_off_rounded, size: 14, color: AppTheme.onSurfaceVariant),
-                    SizedBox(width: 5),
-                    Expanded(
-                      child: Text(
-                        'Reveals after both answer',
-                        style: TextStyle(fontSize: 11, color: AppTheme.onSurfaceVariant),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.deepBerry,
-                  foregroundColor: Colors.white,
-                  elevation: 1,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                ),
-                onPressed: () => _openWhisperDialog(context, partnerName),
-                icon: const Icon(Icons.send_rounded, size: 14),
-                label: const Text('Whispered Reply', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _openWhisperDialog(BuildContext context, String partnerName) {
-    final controller = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: Row(
-          children: const [
-            Icon(Icons.lock_rounded, color: AppTheme.crimson, size: 20),
-            SizedBox(width: 8),
-            Text('Whisper Reply', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Your answer is encrypted and sealed. It unlocks only when $partnerName submits theirs.',
-              style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              maxLines: 3,
-              autofocus: true,
-              decoration: InputDecoration(
-                hintText: 'Share your intimate thoughts...',
-                hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade400),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(color: AppTheme.blush),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(color: AppTheme.crimson),
-                ),
-                filled: true,
-                fillColor: AppTheme.surfaceContainerLow.withValues(alpha: 0.5),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Whispered response safely sealed! 💕'),
-                  backgroundColor: AppTheme.deepBerry,
-                ),
-              );
-            },
-            child: const Text('Seal & Send'),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildSexTab(
     BuildContext context,
     CoupleRepository repo,
@@ -591,27 +400,93 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       },
                     ),
 
-                    // 2. Stitch Daily Spark Connection Question
-                    _buildDailyPromptCard(context, repo),
-
-                    const SizedBox(height: 20),
-
-                    // 3. Stitch Special Proposal Date Night Card
-                    ScheduledDateCard(
-                      dateItem: nextDate,
-                      currentUserId: repo.currentUserId,
-                      lastPeriodStartDate: repo.lastPeriodStartDate,
-                      cycleLength: repo.cycleLength,
-                      periodLength: repo.periodLength,
-                      safetyBufferDays: repo.safetyBufferDays,
-                      onOpenScheduleModal: () => _openScheduleModal(context),
-                      onRespond: (id, status) {
-                        ref.read(coupleRepositoryProvider.notifier).respondToDate(id, status);
-                      },
-                      onRespondVibeCheck: (id, status) {
-                        ref.read(coupleRepositoryProvider.notifier).respondVibeCheck(id, status);
-                      },
-                    ),
+                    if (ref.watch(coupleMemoriesProvider).isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      InkWell(
+                        onTap: () => _openMemoriesModal(context),
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: AppTheme.blush, width: 1.2),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.02),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: (unreadCount > 0 ? AppTheme.crimson : AppTheme.plum).withValues(alpha: 0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  unreadCount > 0 ? Icons.mark_email_unread_rounded : Icons.mail_outline_rounded,
+                                  size: 18,
+                                  color: unreadCount > 0 ? AppTheme.crimson : AppTheme.plum,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const Text(
+                                          'Spark & Memory Inbox',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                            color: AppTheme.plum,
+                                          ),
+                                        ),
+                                        if (unreadCount > 0) ...[
+                                          const SizedBox(width: 6),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: AppTheme.crimson,
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                            child: Text(
+                                              '$unreadCount NEW',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 9,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      ref.watch(coupleMemoriesProvider).first.title,
+                                      style: TextStyle(
+                                        fontSize: 11.5,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Icon(Icons.chevron_right_rounded, color: Colors.grey, size: 20),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
