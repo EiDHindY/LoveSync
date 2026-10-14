@@ -288,7 +288,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     int unreadCount,
   ) {
     final userName = repo.currentUserName.isNotEmpty ? repo.currentUserName : 'You';
-    final partnerName = repo.partnerName.isNotEmpty ? repo.partnerName : 'Partner';
 
     return SingleChildScrollView(
       key: const PageStorageKey('sex_tab_scroll'),
@@ -296,61 +295,32 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Stitch: Tonight's Alignment Greeting Header
+          // Tonight's Alignment Greeting Header
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 7,
-                    height: 7,
-                    decoration: const BoxDecoration(
-                      color: AppTheme.crimson,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  const Text(
-                    "TONIGHT'S ALIGNMENT",
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.1,
-                      color: AppTheme.crimson,
-                    ),
-                  ),
-                ],
-              ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: AppTheme.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(14),
+                width: 7,
+                height: 7,
+                decoration: const BoxDecoration(
+                  color: AppTheme.crimson,
+                  shape: BoxShape.circle,
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    Icon(Icons.lock_rounded, size: 12, color: AppTheme.onSurfaceVariant),
-                    SizedBox(width: 4),
-                    Text(
-                      'End-to-End Private',
-                      style: TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
+              ),
+              const SizedBox(width: 6),
+              const Text(
+                "TONIGHT'S ALIGNMENT",
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.1,
+                  color: AppTheme.crimson,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 6),
           Text(
-            repo.isPaired
-                ? '${_getGreeting()}, $userName & $partnerName'
-                : '${_getGreeting()}, $userName',
+            '${_getGreeting()}, $userName',
             style: const TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,

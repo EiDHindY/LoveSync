@@ -123,7 +123,7 @@ class _SparkButtonState extends State<SparkButton>
     }
   }
 
-  String _formatRemainingTime(DateTime now, bool isMatch) {
+  String _formatRemainingTime(DateTime now, bool isMatch, [bool isLit = false]) {
     final expiry = _getExpiryTime(now);
     final diff = expiry.difference(now);
     final hours = diff.inHours;
@@ -135,6 +135,8 @@ class _SparkButtonState extends State<SparkButton>
 
     if (isMatch) {
       return 'Match active until $targetTimeStr ($remainingStr)';
+    } else if (isLit) {
+      return 'Spark active until $targetTimeStr ($remainingStr)';
     } else {
       return 'Spark resets at $targetTimeStr ($remainingStr)';
     }
@@ -482,29 +484,32 @@ class _SparkButtonState extends State<SparkButton>
 
                       // Center Circular Button
                       Container(
-                        width: 128,
-                        height: 128,
+                        width: 140,
+                        height: 140,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           gradient: isLit
                               ? const LinearGradient(
-                                  colors: [Color(0xFFB61D46), Color(0xFF6B113B)],
+                                  colors: [Color(0xFFE11D48), Color(0xFF880E4F)],
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
                                 )
-                              : null,
-                          color: isLit ? null : Colors.white,
+                              : const LinearGradient(
+                                  colors: [Colors.white, Color(0xFFFFF0F5)],
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                ),
                           border: Border.all(
                             color: isLit
-                                ? Colors.transparent
-                                : AppTheme.roseGold.withValues(alpha: 0.5),
-                            width: 2,
+                                ? Colors.white.withValues(alpha: 0.7)
+                                : AppTheme.crimson.withValues(alpha: 0.4),
+                            width: 2.5,
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: (isLit ? AppTheme.crimson : Colors.black)
-                                  .withValues(alpha: isLit ? 0.35 : 0.05),
-                              blurRadius: isLit ? 20 : 10,
+                              color: (isLit ? AppTheme.crimson : const Color(0xFFE11D48))
+                                  .withValues(alpha: isLit ? 0.45 : 0.16),
+                              blurRadius: isLit ? 24 : 14,
                               offset: const Offset(0, 6),
                             ),
                           ],
@@ -515,23 +520,27 @@ class _SparkButtonState extends State<SparkButton>
                             Icon(
                               Icons.local_fire_department_rounded,
                               size: 40,
-                              color: isLit ? AppTheme.primaryFixed : Colors.grey.shade400,
+                              color: isLit ? const Color(0xFFFFD9E3) : AppTheme.crimson,
                             ),
                             const SizedBox(height: 3),
                             Text(
-                              isLit ? 'Spark Lit' : 'Light My Spark',
+                              isLit ? 'Spark Lit 🔥' : 'Tap to be in the mood',
+                              textAlign: TextAlign.center,
                               style: TextStyle(
-                                fontSize: 14.5,
-                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
                                 color: isLit ? Colors.white : AppTheme.plum,
-                                letterSpacing: 0.3,
+                                letterSpacing: 0.1,
                               ),
                             ),
+                            const SizedBox(height: 2),
                             Text(
-                              isLit ? 'Tap to soften' : 'Double-blind tap',
+                              isLit ? 'Tap to cancel' : 'Light My Spark',
+                              textAlign: TextAlign.center,
                               style: TextStyle(
                                 fontSize: 10.5,
-                                color: isLit ? AppTheme.primaryFixedDim : Colors.grey.shade500,
+                                fontWeight: FontWeight.w600,
+                                color: isLit ? const Color(0xFFFFB0C9) : AppTheme.onSurfaceVariant,
                               ),
                             ),
                           ],
@@ -543,7 +552,87 @@ class _SparkButtonState extends State<SparkButton>
               },
             ),
           ),
-          const SizedBox(height: 20),
+
+          // Action button pill
+          GestureDetector(
+            onTap: _isLoading ? null : _handleToggle,
+            child: Container(
+              margin: const EdgeInsets.only(top: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+              decoration: BoxDecoration(
+                color: isLit ? AppTheme.crimson : Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: isLit ? AppTheme.crimson : AppTheme.roseGold.withValues(alpha: 0.8),
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: (isLit ? AppTheme.crimson : Colors.black).withValues(alpha: 0.08),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    isLit ? Icons.check_circle_rounded : Icons.touch_app_rounded,
+                    size: 16,
+                    color: isLit ? Colors.white : AppTheme.crimson,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    isLit ? 'In the mood · Tap to turn off' : 'Tap to be in the mood',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.bold,
+                      color: isLit ? Colors.white : AppTheme.deepBerry,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Time until reset indicator
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+            decoration: BoxDecoration(
+              color: isLit ? AppTheme.surfaceContainerHigh : Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isLit ? AppTheme.roseGold : AppTheme.blush,
+                width: 1.2,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.timer_outlined, size: 14, color: AppTheme.crimson),
+                const SizedBox(width: 6),
+                Text(
+                  _formatRemainingTime(DateTime.now(), false, isLit),
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.deepBerry,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
 
           // Live Partner State Indicator & Breathing Effect
           Container(
