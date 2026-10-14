@@ -59,9 +59,9 @@ class NotificationService {
       playSparkSound();
     }
 
-    // 2. Heartbeat Haptic Feedback
+    // 2. Soft & Gentle Haptic Feedback
     try {
-      HapticFeedback.heavyImpact();
+      HapticFeedback.mediumImpact();
     } catch (_) {}
 
     // 3. Distinct Red In-App Floating Notification Banner (Visible on Web & Mobile Foreground)
@@ -184,12 +184,12 @@ class NotificationService {
       return;
     }
 
-    // 4. Android System Notification with Custom Red Coloring & Heartbeat Sound
+    // 4. Android System Notification with Custom Red Coloring & Warm Romantic Chime
     final androidDetails = isSparkMatch
         ? AndroidNotificationDetails(
-            'lovesync_spark_channel_v3',
+            'lovesync_spark_channel_v4',
             'LoveSync Spark Matches 🔥',
-            channelDescription: 'Passionate red celebration alerts for mutual spark matches',
+            channelDescription: 'Warm, lovely romantic alerts for mutual spark matches',
             importance: Importance.max,
             priority: Priority.high,
             sound: const RawResourceAndroidNotificationSound('spark_match'),
@@ -201,7 +201,7 @@ class NotificationService {
             color: const Color(0xFFD61A4C), // Passionate Crimson Red
             colorized: true, // Paints the Android notification header & accents in red
             enableVibration: true,
-            vibrationPattern: Int64List.fromList([0, 250, 150, 250, 150, 400]), // heartbeat pulse
+            vibrationPattern: Int64List.fromList([0, 80, 100, 80]), // soft, tender pulse
             styleInformation: BigTextStyleInformation(
               body,
               contentTitle: title,
