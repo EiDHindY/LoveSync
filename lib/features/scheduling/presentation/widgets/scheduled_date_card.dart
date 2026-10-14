@@ -124,6 +124,7 @@ class ScheduledDateCard extends StatelessWidget {
     final dateFormatted = DateFormat('EEEE, MMM d · h:mm a').format(date.scheduledAt);
     final isOwner = date.proposedBy == currentUserId;
     final isDateToday = _isToday(date.scheduledAt);
+    final isDatePast = date.scheduledAt.isBefore(DateTime.now());
 
     final fertility = CycleEngine.calculateFertility(
       targetDate: date.scheduledAt,
@@ -189,45 +190,88 @@ class ScheduledDateCard extends StatelessWidget {
               color: AppTheme.plum,
             ),
           ),
-          const SizedBox(height: 10),
-
-          // Cycle Safety / Bio-rhythm Pill
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: fertility.bgColor,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: fertility.color.withValues(alpha: 0.3)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 7,
-                  height: 7,
-                  decoration: BoxDecoration(
-                    color: fertility.color,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text(
-                    fertility.dayOfCycle != null
-                        ? '${fertility.title} (Day ${fertility.dayOfCycle})'
-                        : fertility.title,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: fertility.color,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
           const SizedBox(height: 8),
+
+          // Chips Row: Countdown & Bio-rhythm
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              // Days and Hours Left Countdown Badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: isDatePast
+                      ? Colors.grey.shade100
+                      : const Color(0xFFFFF0F5),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: isDatePast
+                        ? Colors.grey.shade300
+                        : AppTheme.crimson.withValues(alpha: 0.35),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.hourglass_top_rounded,
+                      size: 13,
+                      color: isDatePast ? Colors.grey.shade600 : AppTheme.crimson,
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      date.formatCountdown(),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: isDatePast ? Colors.grey.shade700 : AppTheme.crimson,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Cycle Safety / Bio-rhythm Pill
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: fertility.bgColor,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: fertility.color.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 7,
+                      height: 7,
+                      decoration: BoxDecoration(
+                        color: fertility.color,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        fertility.dayOfCycle != null
+                            ? '${fertility.title} (Day ${fertility.dayOfCycle})'
+                            : fertility.title,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: fertility.color,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
 
           // Bio-rhythm insight
           Container(

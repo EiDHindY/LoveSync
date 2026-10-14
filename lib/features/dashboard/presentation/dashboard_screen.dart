@@ -564,7 +564,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final mood = ref.watch(todayMoodStatusProvider);
     final scheduledDates = ref.watch(scheduledDatesProvider);
     final unreadCount = ref.watch(unreadMemoriesCountProvider);
-    final nextDate = scheduledDates.isNotEmpty ? scheduledDates.first : null;
+    final now = DateTime.now();
+    ScheduledIntimacy? nextDate;
+    if (scheduledDates.isNotEmpty) {
+      final upcoming = scheduledDates
+          .where((d) => d.scheduledAt.isAfter(now.subtract(const Duration(hours: 4))))
+          .toList();
+      if (upcoming.isNotEmpty) {
+        upcoming.sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
+        nextDate = upcoming.first;
+      } else {
+        nextDate = scheduledDates.first;
+      }
+    }
 
     if (repo.isPaired && repo.partnerName.isEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {

@@ -280,7 +280,7 @@ class _SparkButtonState extends State<SparkButton>
           ),
           const SizedBox(height: 4),
           Text(
-            'Both of you are in the mood tonight. A secret match made in heaven.',
+            'Both of you are in the mood tonight.',
             style: TextStyle(
               fontSize: 13,
               color: Colors.white.withValues(alpha: 0.92),

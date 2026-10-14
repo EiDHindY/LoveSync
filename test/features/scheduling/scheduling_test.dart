@@ -69,5 +69,38 @@ void main() {
         equals(VibeCheckStatus.convertedCuddle),
       );
     });
+
+    test('Countdown formatting correctly displays days and hours left', () {
+      final now = DateTime(2026, 10, 15, 12, 0);
+
+      // 2 days and 5 hours in future
+      final futureDate = DateTime(2026, 10, 17, 17, 0);
+      expect(
+        ScheduledIntimacy.formatDurationUntil(futureDate, from: now),
+        equals('2 days, 5 hrs left'),
+      );
+
+      // Exactly 1 day in future
+      final oneDayDate = DateTime(2026, 10, 16, 12, 0);
+      expect(
+        ScheduledIntimacy.formatDurationUntil(oneDayDate, from: now),
+        equals('1 day left'),
+      );
+
+      // 4 hours and 30 minutes in future
+      final hoursDate = DateTime(2026, 10, 15, 16, 30);
+      expect(
+        ScheduledIntimacy.formatDurationUntil(hoursDate, from: now),
+        equals('4 hrs, 30 min left'),
+      );
+
+      // Past date
+      final pastDate = DateTime(2026, 10, 15, 10, 0);
+      expect(
+        ScheduledIntimacy.formatDurationUntil(pastDate, from: now),
+        equals('Passed 2h ago'),
+      );
+    });
   });
 }
+

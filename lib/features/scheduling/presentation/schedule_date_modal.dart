@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:love_app/core/theme/app_theme.dart';
 import 'package:love_app/features/cycle/domain/cycle_engine.dart';
 import 'package:love_app/features/cycle/domain/fertility_status.dart';
+import 'package:love_app/features/scheduling/domain/scheduled_intimacy.dart';
 
 class ScheduleDateModal extends StatefulWidget {
   final DateTime? lastPeriodStartDate;
@@ -28,11 +29,22 @@ class _ScheduleDateModalState extends State<ScheduleDateModal> {
   late DateTime _selectedDate;
   TimeOfDay _selectedTime = const TimeOfDay(hour: 21, minute: 0);
 
+  DateTime get _scheduledDateTime => DateTime(
+        _selectedDate.year,
+        _selectedDate.month,
+        _selectedDate.day,
+        _selectedTime.hour,
+        _selectedTime.minute,
+      );
+
+  bool get _isPast => _scheduledDateTime.isBefore(DateTime.now());
+
   @override
   void initState() {
     super.initState();
-    // Default to upcoming Friday or 3 days from now
-    _selectedDate = DateTime.now().add(const Duration(days: 3));
+    // Default to upcoming 3 days from now at 9:00 PM
+    final now = DateTime.now();
+    _selectedDate = DateTime(now.year, now.month, now.day).add(const Duration(days: 3));
   }
 
   DailyFertilityInfo _getProjectedFertility(DateTime date) {
@@ -46,11 +58,13 @@ class _ScheduleDateModalState extends State<ScheduleDateModal> {
   }
 
   Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     final picked = await showDatePicker(
       context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 60)),
+      initialDate: _selectedDate.isBefore(today) ? today : _selectedDate,
+      firstDate: today,
+      lastDate: today.add(const Duration(days: 60)),
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
@@ -65,7 +79,19 @@ class _ScheduleDateModalState extends State<ScheduleDateModal> {
       },
     );
     if (picked != null) {
-      setState(() => _selectedDate = picked);
+      setState(() {
+        _selectedDate = picked;
+        // If user picked today, ensure the selected time hasn't already passed
+        final isToday = picked.year == now.year && picked.month == now.month && picked.day == now.day;
+        if (isToday) {
+          final nowMinutes = now.hour * 60 + now.minute;
+          final selectedMinutes = _selectedTime.hour * 60 + _selectedTime.minute;
+          if (selectedMinutes <= nowMinutes) {
+            final nextHour = (now.hour + 1) % 24;
+            _selectedTime = TimeOfDay(hour: nextHour, minute: 0);
+          }
+        }
+      });
     }
   }
 
@@ -75,6 +101,31 @@ class _ScheduleDateModalState extends State<ScheduleDateModal> {
       initialTime: _selectedTime,
     );
     if (picked != null) {
+      final now = DateTime.now();
+      final isToday = _selectedDate.year == now.year &&
+          _selectedDate.month == now.month &&
+          _selectedDate.day == now.day;
+      if (isToday) {
+        final candidate = DateTime(
+          _selectedDate.year,
+          _selectedDate.month,
+          _selectedDate.day,
+          picked.hour,
+          picked.minute,
+        );
+        if (candidate.isBefore(now)) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Cannot select a time in the past. Please choose a future time.'),
+                backgroundColor: AppTheme.crimson,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+          return;
+        }
+      }
       setState(() => _selectedTime = picked);
     }
   }
@@ -191,7 +242,62 @@ class _ScheduleDateModalState extends State<ScheduleDateModal> {
             ],
           ),
 
-          const SizedBox(height: 18),
+          const SizedBox(height: 14),
+
+          // Smart countdown & validation preview
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: _isPast ? const Color(0xFFFFF1F2) : const Color(0xFFFBF4F7),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: _isPast
+                    ? const Color(0xFFFDA4AF)
+                    : AppTheme.roseGold.withValues(alpha: 0.4),
+                width: 1.2,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  _isPast ? Icons.schedule_send_rounded : Icons.hourglass_top_rounded,
+                  size: 20,
+                  color: _isPast ? AppTheme.crimson : AppTheme.deepBerry,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _isPast ? 'CANNOT SCHEDULE IN THE PAST' : 'TIME UNTIL DATE',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5,
+                          color: _isPast ? AppTheme.crimson : Colors.grey.shade600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _isPast
+                            ? 'Please select a future date or time.'
+                            : ScheduledIntimacy.formatDurationUntil(_scheduledDateTime),
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: _isPast ? AppTheme.crimson : AppTheme.plum,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 14),
 
           // Live Fertility Preview Badge for Selected Date
           Container(
@@ -236,19 +342,14 @@ class _ScheduleDateModalState extends State<ScheduleDateModal> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: () {
-                final scheduledDateTime = DateTime(
-                  _selectedDate.year,
-                  _selectedDate.month,
-                  _selectedDate.day,
-                  _selectedTime.hour,
-                  _selectedTime.minute,
-                );
-                widget.onSchedule(scheduledDateTime);
-                Navigator.of(context).pop();
-              },
+              onPressed: _isPast
+                  ? null
+                  : () {
+                      widget.onSchedule(_scheduledDateTime);
+                      Navigator.of(context).pop();
+                    },
               icon: const Icon(Icons.send_rounded, size: 18),
-              label: const Text('Send Date Proposal'),
+              label: Text(_isPast ? 'Choose a Future Time' : 'Send Date Proposal'),
             ),
           ),
         ],

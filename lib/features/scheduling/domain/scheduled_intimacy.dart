@@ -118,4 +118,44 @@ class ScheduledIntimacy {
       createdAt: createdAt ?? this.createdAt,
     );
   }
+
+  String formatCountdown({DateTime? from}) {
+    return formatDurationUntil(scheduledAt, from: from);
+  }
+
+  static String formatDurationUntil(DateTime target, {DateTime? from}) {
+    final now = from ?? DateTime.now();
+    final diff = target.difference(now);
+
+    if (diff.isNegative) {
+      final pastHours = (-diff.inHours);
+      if (pastHours < 24) {
+        return pastHours <= 0 ? 'Passed moments ago' : 'Passed ${pastHours}h ago';
+      }
+      final pastDays = (-diff.inDays);
+      return 'Passed ${pastDays}d ago';
+    }
+
+    final days = diff.inDays;
+    final hours = diff.inHours % 24;
+    final minutes = diff.inMinutes % 60;
+
+    if (days > 0) {
+      if (hours > 0) {
+        return '$days ${days == 1 ? "day" : "days"}, $hours ${hours == 1 ? "hr" : "hrs"} left';
+      } else {
+        return '$days ${days == 1 ? "day" : "days"} left';
+      }
+    } else if (hours > 0) {
+      if (minutes > 0) {
+        return '$hours ${hours == 1 ? "hr" : "hrs"}, $minutes min left';
+      } else {
+        return '$hours ${hours == 1 ? "hr" : "hrs"} left';
+      }
+    } else if (minutes > 0) {
+      return '$minutes min left';
+    } else {
+      return 'Starting now';
+    }
+  }
 }
