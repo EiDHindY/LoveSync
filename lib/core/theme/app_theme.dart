@@ -12,6 +12,15 @@ class AppTheme {
   static const Color backgroundLight = Color(0xFFFAF7F5);
   static const Color cardLight = Colors.white;
 
+  // Stitch Warm Romantic Surface Tokens
+  static const Color surfaceContainerLow = Color(0xFFFFEFF7);
+  static const Color surfaceContainer = Color(0xFFFFE7F6);
+  static const Color surfaceContainerHigh = Color(0xFFFFDFF4);
+  static const Color onSurfaceVariant = Color(0xFF544247);
+  static const Color secondaryContainer = Color(0xFFFE5678);
+  static const Color primaryFixed = Color(0xFFFFD9E3);
+  static const Color primaryFixedDim = Color(0xFFFFB0C9);
+
   // Status Colors for Fertility
   static const Color safeGreen = Color(0xFF10B981);
   static const Color safeGreenBg = Color(0xFFE8F5E9);

@@ -269,6 +269,189 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour >= 5 && hour < 12) {
+      return 'Good morning';
+    } else if (hour >= 12 && hour < 17) {
+      return 'Good afternoon';
+    } else {
+      return 'Good evening';
+    }
+  }
+
+  Widget _buildDailyPromptCard(BuildContext context, CoupleRepository repo) {
+    final partnerName = repo.partnerName.isNotEmpty ? repo.partnerName : 'Partner';
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 18),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: LinearGradient(
+          colors: [
+            Colors.white,
+            AppTheme.surfaceContainerLow.withValues(alpha: 0.6),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(color: AppTheme.blush, width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF2C0E28).withValues(alpha: 0.03),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: const [
+                  Icon(Icons.psychology_rounded, size: 18, color: AppTheme.secondaryContainer),
+                  SizedBox(width: 6),
+                  Text(
+                    'DAILY SPARK QUESTION',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.1,
+                      color: AppTheme.deepBerry,
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppTheme.surfaceContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '$partnerName answered ✓',
+                  style: const TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.deepBerry,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            '“What is one touch or gesture from this week that made you feel most desired?”',
+            style: TextStyle(
+              fontSize: 14.5,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.plum,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: const [
+                  Icon(Icons.visibility_off_rounded, size: 14, color: AppTheme.onSurfaceVariant),
+                  SizedBox(width: 5),
+                  Text(
+                    'Reveals after both answer',
+                    style: TextStyle(fontSize: 11, color: AppTheme.onSurfaceVariant),
+                  ),
+                ],
+              ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.deepBerry,
+                  foregroundColor: Colors.white,
+                  elevation: 1,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                ),
+                onPressed: () => _openWhisperDialog(context, partnerName),
+                icon: const Icon(Icons.send_rounded, size: 14),
+                label: const Text('Whispered Reply', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openWhisperDialog(BuildContext context, String partnerName) {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Row(
+          children: const [
+            Icon(Icons.lock_rounded, color: AppTheme.crimson, size: 20),
+            SizedBox(width: 8),
+            Text('Whisper Reply', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Your answer is encrypted and sealed. It unlocks only when $partnerName submits theirs.',
+              style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              maxLines: 3,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: 'Share your intimate thoughts...',
+                hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade400),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: AppTheme.blush),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: const BorderSide(color: AppTheme.crimson),
+                ),
+                filled: true,
+                fillColor: AppTheme.surfaceContainerLow.withValues(alpha: 0.5),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Whispered response safely sealed! 💕'),
+                  backgroundColor: AppTheme.deepBerry,
+                ),
+              );
+            },
+            child: const Text('Seal & Send'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSexTab(
     BuildContext context,
     CoupleRepository repo,
@@ -276,12 +459,84 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     ScheduledIntimacy? nextDate,
     int unreadCount,
   ) {
+    final userName = repo.currentUserName.isNotEmpty ? repo.currentUserName : 'You';
+    final partnerName = repo.partnerName.isNotEmpty ? repo.partnerName : 'Partner';
+
     return SingleChildScrollView(
       key: const PageStorageKey('sex_tab_scroll'),
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Stitch: Tonight's Alignment Greeting Header
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 7,
+                    height: 7,
+                    decoration: const BoxDecoration(
+                      color: AppTheme.crimson,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  const Text(
+                    "TONIGHT'S ALIGNMENT",
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.1,
+                      color: AppTheme.crimson,
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppTheme.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(Icons.lock_rounded, size: 12, color: AppTheme.onSurfaceVariant),
+                    SizedBox(width: 4),
+                    Text(
+                      'End-to-End Private',
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            repo.isPaired
+                ? '${_getGreeting()}, $userName & $partnerName'
+                : '${_getGreeting()}, $userName',
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.plum,
+              letterSpacing: -0.4,
+            ),
+          ),
+          const SizedBox(height: 2),
+          const Text(
+            'Private encrypted sanctuary · Both must agree',
+            style: TextStyle(fontSize: 12.5, color: AppTheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 16),
+
           if (!repo.isPaired) ...[
             _buildConnectPartnerCard(context, repo),
             const SizedBox(height: 18),
@@ -304,9 +559,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 1. Double-Blind Mood Matching ("The Spark")
+                    // 1. Double-Blind Mood Matching ("The Spark") with Stitch styling
                     SparkButton(
                       moodStatus: mood,
+                      partnerName: repo.partnerName,
+                      userName: repo.currentUserName,
                       onToggle: () async {
                         if (mood.isMatch) {
                           await ref.read(coupleRepositoryProvider.notifier).turnOffSparkMatch();
@@ -316,96 +573,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       },
                     ),
 
-                    if (ref.watch(coupleMemoriesProvider).isNotEmpty) ...[
-                      const SizedBox(height: 14),
-                      InkWell(
-                        onTap: () => _openMemoriesModal(context),
-                        borderRadius: BorderRadius.circular(16),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: AppTheme.roseGold.withValues(alpha: 0.4)),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.02),
-                                blurRadius: 6,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(7),
-                                decoration: BoxDecoration(
-                                  color: (unreadCount > 0 ? AppTheme.crimson : AppTheme.plum).withValues(alpha: 0.1),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  unreadCount > 0 ? Icons.mark_email_unread_rounded : Icons.mail_outline_rounded,
-                                  size: 16,
-                                  color: unreadCount > 0 ? AppTheme.crimson : AppTheme.plum,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        const Text(
-                                          'Spark & Memory Inbox',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.bold,
-                                            color: AppTheme.plum,
-                                          ),
-                                        ),
-                                        if (unreadCount > 0) ...[
-                                          const SizedBox(width: 6),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                            decoration: BoxDecoration(
-                                              color: AppTheme.crimson,
-                                              borderRadius: BorderRadius.circular(8),
-                                            ),
-                                            child: Text(
-                                              '$unreadCount NEW',
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 9,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ],
-                                    ),
-                                    Text(
-                                      ref.watch(coupleMemoriesProvider).first.title,
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.grey.shade600,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const Icon(Icons.chevron_right_rounded, color: Colors.grey, size: 18),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
+                    // 2. Stitch Daily Spark Connection Question
+                    _buildDailyPromptCard(context, repo),
 
                     const SizedBox(height: 20),
 
-                    // 2. Low-Pressure Scheduled Intimacy Card
+                    // 3. Stitch Special Proposal Date Night Card
                     ScheduledDateCard(
                       dateItem: nextDate,
                       currentUserId: repo.currentUserId,
@@ -519,67 +692,63 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     return Scaffold(
       appBar: AppBar(
         centerTitle: false,
-        titleSpacing: 8,
+        titleSpacing: 12,
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 26,
-              height: 26,
+              width: 30,
+              height: 30,
               decoration: BoxDecoration(
-                color: AppTheme.blush,
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: AppTheme.roseGold.withValues(alpha: 0.6),
-                  width: 1.5,
+                gradient: const LinearGradient(
+                  colors: [AppTheme.secondaryContainer, AppTheme.crimson],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppTheme.crimson.withValues(alpha: 0.3),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
               child: const Center(
-                child: Icon(Icons.favorite_rounded, color: AppTheme.crimson, size: 15),
+                child: Icon(Icons.favorite_rounded, color: Colors.white, size: 16),
               ),
             ),
-            const SizedBox(width: 6),
-            const Flexible(
-              child: Text(
-                'LoveSync',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 17,
-                ),
-                overflow: TextOverflow.ellipsis,
+            const SizedBox(width: 8),
+            const Text(
+              'LoveSync',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 19,
+                letterSpacing: -0.3,
+                color: AppTheme.plum,
               ),
             ),
           ],
         ),
         actions: [
-          IconButton(
-            tooltip: 'Memories & Spark Inbox',
-            icon: Badge(
-              isLabelVisible: unreadCount > 0,
-              label: Text(
-                '$unreadCount',
-                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
-              ),
-              backgroundColor: AppTheme.crimson,
-              child: Icon(
-                unreadCount > 0 ? Icons.mark_email_unread_rounded : Icons.mail_outline_rounded,
-                color: AppTheme.plum,
-                size: 22,
-              ),
-            ),
-            onPressed: () => _openMemoriesModal(context),
-          ),
           if (repo.isPaired)
             InkWell(
               onTap: () => _openPartnerModal(context),
               borderRadius: BorderRadius.circular(20),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
                 decoration: BoxDecoration(
-                  color: AppTheme.blush.withValues(alpha: 0.7),
+                  color: AppTheme.surfaceContainerLow,
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppTheme.crimson.withValues(alpha: 0.3)),
+                  border: Border.all(color: AppTheme.blush),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF6B113B).withValues(alpha: 0.04),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -594,6 +763,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           fontWeight: FontWeight.bold,
                           fontSize: 10,
                         ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF10B981),
+                        shape: BoxShape.circle,
                       ),
                     ),
                     const SizedBox(width: 5),
@@ -642,11 +820,28 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ),
               ),
               style: TextButton.styleFrom(
-                backgroundColor: AppTheme.blush.withValues(alpha: 0.5),
+                backgroundColor: AppTheme.surfaceContainerLow,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               ),
             ),
+          IconButton(
+            tooltip: 'Memories & Spark Inbox',
+            icon: Badge(
+              isLabelVisible: unreadCount > 0,
+              label: Text(
+                '$unreadCount',
+                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+              ),
+              backgroundColor: AppTheme.crimson,
+              child: const Icon(
+                Icons.mail_outline_rounded,
+                color: AppTheme.plum,
+                size: 22,
+              ),
+            ),
+            onPressed: () => _openMemoriesModal(context),
+          ),
           PopupMenuButton<String>(
             padding: const EdgeInsets.only(right: 6),
             icon: const Icon(Icons.more_vert, color: AppTheme.plum),
@@ -762,29 +957,52 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       ),
       bottomNavigationBar: repo.tracksCycle
           ? NavigationBar(
-              selectedIndex: _currentIndex,
+              selectedIndex: _currentIndex.clamp(0, 3),
               onDestinationSelected: (index) {
-                setState(() {
-                  _currentIndex = index;
-                });
-                if (_pageController.hasClients) {
-                  _pageController.animateToPage(
-                    index,
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeInOut,
-                  );
+                if (index == 0) {
+                  setState(() => _currentIndex = 0);
+                  if (_pageController.hasClients) {
+                    _pageController.animateToPage(
+                      0,
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                    );
+                  }
+                } else if (index == 1) {
+                  setState(() => _currentIndex = 1);
+                  if (_pageController.hasClients) {
+                    _pageController.animateToPage(
+                      1,
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                    );
+                  }
+                } else if (index == 2) {
+                  _openScheduleModal(context);
+                } else if (index == 3) {
+                  _openMemoriesModal(context);
                 }
               },
               destinations: const [
                 NavigationDestination(
-                  icon: Icon(Icons.favorite_border_rounded),
-                  selectedIcon: Icon(Icons.favorite_rounded),
+                  icon: Icon(Icons.local_fire_department_outlined),
+                  selectedIcon: Icon(Icons.local_fire_department_rounded, color: AppTheme.crimson),
                   label: 'Sex & Intimacy',
                 ),
                 NavigationDestination(
-                  icon: Icon(Icons.water_drop_outlined),
-                  selectedIcon: Icon(Icons.water_drop_rounded),
+                  icon: Icon(Icons.spa_outlined),
+                  selectedIcon: Icon(Icons.spa_rounded, color: AppTheme.crimson),
                   label: 'Cycle & Period',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.wine_bar_outlined),
+                  selectedIcon: Icon(Icons.wine_bar_rounded, color: AppTheme.crimson),
+                  label: 'Date Night',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.collections_bookmark_outlined),
+                  selectedIcon: Icon(Icons.collections_bookmark_rounded, color: AppTheme.crimson),
+                  label: 'Memories',
                 ),
               ],
             )
