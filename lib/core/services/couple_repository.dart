@@ -179,12 +179,19 @@ class CoupleRepository extends ChangeNotifier {
     }
   }
 
-  /// Logical intimacy date key (YYYY-MM-DD).
-  /// A day runs from 4:00 AM to 4:00 AM the next morning,
-  /// ensuring late-night sparks past midnight stay active together.
+  /// Generates the 12-hour cycle window key (4 AM - 4 PM Day, 4 PM - 4 AM Night).
+  /// Every cycle lasts 12 hours and resets automatically at 4 AM and 4 PM.
   String _dateKey(DateTime dt) {
-    final logical = dt.subtract(const Duration(hours: 4));
-    return '${logical.year}-${logical.month.toString().padLeft(2, '0')}-${logical.day.toString().padLeft(2, '0')}';
+    final shifted = dt.subtract(const Duration(hours: 4));
+    final period = (shifted.hour < 12) ? 'DAY' : 'NIGHT';
+    final dateStr = '${shifted.year}-${shifted.month.toString().padLeft(2, '0')}-${shifted.day.toString().padLeft(2, '0')}';
+    return '$dateStr-$period';
+  }
+
+  /// Whether current time is in the Daytime window (4:00 AM - 4:00 PM).
+  bool get isDaySparkWindow {
+    final shifted = DateTime.now().subtract(const Duration(hours: 4));
+    return shifted.hour < 12;
   }
 
   static const String _codeAlphabet = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';

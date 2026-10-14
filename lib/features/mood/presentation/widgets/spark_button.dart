@@ -51,6 +51,10 @@ class _SparkButtonState extends State<SparkButton> {
   Widget build(BuildContext context) {
     final isMatch = widget.moodStatus.isMatch;
     final isLit = widget.moodStatus.userInTheMood;
+    final shifted = DateTime.now().subtract(const Duration(hours: 4));
+    final isDay = shifted.hour < 12;
+    final timeLabel = isDay ? 'Today' : 'Tonight';
+    final windowLabel = isDay ? 'DAY SPARK • 4AM - 4PM' : 'NIGHT SPARK • 4PM - 4AM';
 
     return Stack(
       alignment: Alignment.center,
@@ -121,17 +125,17 @@ class _SparkButtonState extends State<SparkButton> {
                         ? Icons.local_fire_department
                         : isLit
                             ? Icons.flare
-                            : Icons.favorite_border,
+                            : (isDay ? Icons.wb_sunny_rounded : Icons.favorite_border),
                     color: (isMatch || isLit) ? Colors.white : AppTheme.crimson,
-                    size: 20,
+                    size: 18,
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'ZERO-PRESSURE SPARK',
+                    windowLabel,
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 11,
                       fontWeight: FontWeight.w800,
-                      letterSpacing: 1.2,
+                      letterSpacing: 1.1,
                       color: (isMatch || isLit) ? Colors.white.withValues(alpha: 0.9) : AppTheme.plum.withValues(alpha: 0.7),
                     ),
                   ),
@@ -194,7 +198,7 @@ class _SparkButtonState extends State<SparkButton> {
                     ? "IT'S A MATCH! 🔥"
                     : isLit
                         ? 'Your Spark is Lit ✨'
-                        : 'In the mood tonight?',
+                        : 'In the mood $timeLabel?',
                 style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
@@ -208,7 +212,7 @@ class _SparkButtonState extends State<SparkButton> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Text(
                   isMatch
-                      ? "Both of you secretly tapped in the mood! The spark is ignited for tonight."
+                      ? "Both of you secretly tapped in the mood! The spark is ignited for $timeLabel."
                       : isLit
                           ? "Your desire is logged privately. Your partner has NO IDEA unless they also tap."
                           : "Tap if you're feeling romantic. If your partner doesn't tap, they will never know.",
@@ -250,7 +254,7 @@ class _SparkButtonState extends State<SparkButton> {
                         ? 'Celebrate! 🎉 (Tap to turn off)'
                         : isLit
                             ? 'Turn Off Spark'
-                            : 'Light My Spark for Tonight',
+                            : 'Light My Spark for $timeLabel',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color: isMatch ? AppTheme.crimson : Colors.white,

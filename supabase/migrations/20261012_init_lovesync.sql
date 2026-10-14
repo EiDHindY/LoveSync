@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS public.mood_signals (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     couple_id UUID REFERENCES public.couples(id) ON DELETE CASCADE NOT NULL,
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-    signal_date DATE NOT NULL,
+    signal_date TEXT NOT NULL,
     in_the_mood BOOLEAN NOT NULL DEFAULT false,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
     UNIQUE(couple_id, user_id, signal_date)
@@ -136,7 +136,7 @@ USING (user_id = auth.uid());
 -- ==============================================================================
 
 -- 1. GET DAILY MOOD STATUS (Security Definer)
-CREATE OR REPLACE FUNCTION public.get_daily_mood_status(p_date DATE)
+CREATE OR REPLACE FUNCTION public.get_daily_mood_status(p_date TEXT)
 RETURNS JSON
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -199,7 +199,7 @@ END;
 $$;
 
 -- 2. TOGGLE MOOD SIGNAL
-CREATE OR REPLACE FUNCTION public.toggle_mood_signal(p_date DATE, p_in_the_mood BOOLEAN)
+CREATE OR REPLACE FUNCTION public.toggle_mood_signal(p_date TEXT, p_in_the_mood BOOLEAN)
 RETURNS JSON
 LANGUAGE plpgsql
 SECURITY DEFINER
