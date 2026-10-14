@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
+import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
@@ -561,13 +562,14 @@ class CoupleRepository extends ChangeNotifier {
           )
           .onBroadcast(
             event: 'date_proposed',
-            callback: (payload) {
+            callback: (payload) async {
               final senderId = payload['sender_id'] as String?;
               if (senderId != null && senderId != _currentUserId) {
                 final dateJson = payload['data'] as Map<String, dynamic>;
                 final newDate = ScheduledIntimacy.fromJson(dateJson);
                 _scheduledDates.removeWhere((e) => e.id == newDate.id);
                 _scheduledDates.insert(0, newDate);
+                await _saveToStorage();
 
                 NotificationService().showNotification(
                   id: 2,
@@ -580,23 +582,57 @@ class CoupleRepository extends ChangeNotifier {
           )
           .onBroadcast(
             event: 'date_responded',
-            callback: (payload) {
+            callback: (payload) async {
               final senderId = payload['sender_id'] as String?;
               if (senderId != null && senderId != _currentUserId) {
-                final dateId = payload['id'] as String;
-                final statusStr = payload['status'] as String;
-                final index = _scheduledDates.indexWhere((e) => e.id == dateId);
-                if (index != -1) {
-                  _scheduledDates[index] = _scheduledDates[index].copyWith(
-                    status: ScheduledIntimacy.fromJson({'status': statusStr}..addAll(_scheduledDates[index].toJson())).status,
-                  );
-                  NotificationService().showNotification(
-                    id: 3,
-                    title: 'Date Night Update ✨',
-                    body: 'Your partner responded: $statusStr',
-                  );
-                  notifyListeners();
+                final dateId = payload['id'] as String?;
+                final statusStr = payload['status'] as String?;
+                final dataJson = payload['data'] as Map<String, dynamic>?;
+                final memoryJson = payload['memory'] as Map<String, dynamic>?;
+
+                if (dateId != null) {
+                  final index = _scheduledDates.indexWhere((e) => e.id == dateId);
+                  if (dataJson != null) {
+                    final updatedItem = ScheduledIntimacy.fromJson(dataJson);
+                    if (index != -1) {
+                      _scheduledDates[index] = updatedItem;
+                    } else {
+                      _scheduledDates.insert(0, updatedItem);
+                    }
+                  } else if (index != -1 && statusStr != null) {
+                    final parsedStatus = IntimacyStatus.values.firstWhere(
+                      (e) => e.name == statusStr,
+                      orElse: () => IntimacyStatus.pending,
+                    );
+                    _scheduledDates[index] = _scheduledDates[index].copyWith(
+                      status: parsedStatus,
+                      counterScheduledAt: payload['counter_scheduled_at'] != null
+                          ? DateTime.tryParse(payload['counter_scheduled_at'] as String)
+                          : null,
+                      responseNote: payload['note'] as String?,
+                    );
+                  }
                 }
+
+                if (memoryJson != null) {
+                  final partnerMem = CoupleMemory.fromJson(memoryJson);
+                  _memories.removeWhere((m) => m.id == partnerMem.id || (m.type == 'date_night' && m.windowKey == partnerMem.windowKey));
+                  _memories.insert(0, partnerMem);
+                }
+
+                await _saveToStorage();
+
+                final senderName = payload['sender_name'] as String? ?? 'Your partner';
+                final isAccepted = statusStr == 'accepted';
+                NotificationService().showNotification(
+                  id: 3,
+                  title: isAccepted ? 'Date Night Accepted! 🥂' : 'Date Night Update ✨',
+                  body: isAccepted
+                      ? '$senderName accepted your date proposal!'
+                      : '$senderName responded: $statusStr',
+                );
+
+                notifyListeners();
               }
             },
           )
@@ -669,10 +705,34 @@ class CoupleRepository extends ChangeNotifier {
         if (data['lastViewedMemoriesAt'] != null) {
           _lastViewedMemoriesAt = DateTime.tryParse(data['lastViewedMemoriesAt'] as String);
         }
+        _ensureDateMemoriesExist();
         notifyListeners();
       }
     } catch (e) {
       debugPrint('Error loading saved state: $e');
+    }
+  }
+
+  void _ensureDateMemoriesExist() {
+    for (final date in _scheduledDates) {
+      if (date.status == IntimacyStatus.accepted) {
+        final formattedDate = DateFormat('EEEE, MMM d @ h:mm a').format(date.scheduledAt);
+        final partnerDisplay = _partnerName.isNotEmpty ? _partnerName : 'Your partner';
+        final windowKey = DateFormat('EEE, MMM d').format(date.scheduledAt);
+        if (!_memories.any((m) => m.type == 'date_night' && m.windowKey == windowKey)) {
+          final mem = CoupleMemory(
+            id: _uuid.v4(),
+            coupleId: _coupleId,
+            createdBy: date.proposedBy,
+            type: 'date_night',
+            title: 'Date Night Confirmed! 🥂',
+            description: 'Date scheduled with $partnerDisplay for $formattedDate.',
+            windowKey: windowKey,
+            createdAt: date.createdAt,
+          );
+          _memories.insert(0, mem);
+        }
+      }
     }
   }
 
@@ -1028,6 +1088,22 @@ class CoupleRepository extends ChangeNotifier {
     _scheduledDates.insert(0, item);
     await _saveToStorage();
 
+    if (SupabaseConfig.isInitialized && Supabase.instance.client.auth.currentUser != null && _coupleId.isNotEmpty) {
+      try {
+        await Supabase.instance.client.from('scheduled_intimacy').upsert({
+          'id': item.id,
+          'couple_id': _coupleId,
+          'proposed_by': _currentUserId,
+          'scheduled_at': item.scheduledAt.toIso8601String(),
+          'status': item.status.name,
+          'created_at': item.createdAt.toIso8601String(),
+          'updated_at': DateTime.now().toIso8601String(),
+        });
+      } catch (e) {
+        debugPrint('Persist scheduled date notice: $e');
+      }
+    }
+
     // Broadcast proposal to partner
     if (_realtimeChannel != null) {
       try {
@@ -1035,6 +1111,7 @@ class CoupleRepository extends ChangeNotifier {
           event: 'date_proposed',
           payload: {
             'sender_id': _currentUserId,
+            'sender_name': _currentUserName,
             'data': item.toJson(),
           },
         );
@@ -1050,12 +1127,66 @@ class CoupleRepository extends ChangeNotifier {
     final index = _scheduledDates.indexWhere((e) => e.id == id);
     if (index != -1) {
       final existing = _scheduledDates[index];
-      _scheduledDates[index] = existing.copyWith(
+      final updated = existing.copyWith(
         status: newStatus,
         counterScheduledAt: counterTime,
         responseNote: note,
       );
+      _scheduledDates[index] = updated;
+
+      CoupleMemory? dateMem;
+      if (newStatus == IntimacyStatus.accepted) {
+        final formattedDate = DateFormat('EEEE, MMM d @ h:mm a').format(updated.scheduledAt);
+        final partnerDisplay = _partnerName.isNotEmpty ? _partnerName : 'Your partner';
+        final windowKey = DateFormat('EEE, MMM d').format(updated.scheduledAt);
+        dateMem = CoupleMemory(
+          id: _uuid.v4(),
+          coupleId: _coupleId,
+          createdBy: _currentUserId,
+          type: 'date_night',
+          title: 'Date Night Confirmed! 🥂',
+          description: 'Date scheduled with $partnerDisplay for $formattedDate.',
+          windowKey: windowKey,
+          createdAt: DateTime.now(),
+        );
+        _memories.removeWhere((m) => m.type == 'date_night' && m.windowKey == windowKey);
+        _memories.insert(0, dateMem);
+      }
+
       await _saveToStorage();
+
+      if (SupabaseConfig.isInitialized && Supabase.instance.client.auth.currentUser != null) {
+        try {
+          final client = Supabase.instance.client;
+          await client.from('scheduled_intimacy').upsert({
+            'id': updated.id,
+            'couple_id': updated.coupleId.isNotEmpty ? updated.coupleId : _coupleId,
+            'proposed_by': updated.proposedBy.isNotEmpty ? updated.proposedBy : _currentUserId,
+            'scheduled_at': updated.scheduledAt.toIso8601String(),
+            'status': updated.status.name,
+            'counter_scheduled_at': updated.counterScheduledAt?.toIso8601String(),
+            'response_note': updated.responseNote,
+            'vibe_check_status': updated.vibeCheckStatus.name,
+            'created_at': updated.createdAt.toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
+          });
+
+          if (dateMem != null && _coupleId.isNotEmpty) {
+            await client.from('couple_memories').upsert({
+              'id': dateMem.id,
+              'couple_id': _coupleId,
+              'created_by': _currentUserId,
+              'type': dateMem.type,
+              'title': dateMem.title,
+              'description': dateMem.description,
+              'window_key': dateMem.windowKey,
+              'created_at': dateMem.createdAt.toIso8601String(),
+            });
+          }
+        } catch (e) {
+          debugPrint('Persist date response notice: $e');
+        }
+      }
 
       if (_realtimeChannel != null) {
         try {
@@ -1063,8 +1194,13 @@ class CoupleRepository extends ChangeNotifier {
             event: 'date_responded',
             payload: {
               'sender_id': _currentUserId,
+              'sender_name': _currentUserName,
               'id': id,
               'status': newStatus.name,
+              'counter_scheduled_at': counterTime?.toIso8601String(),
+              'note': note,
+              'data': updated.toJson(),
+              if (dateMem != null) 'memory': dateMem.toJson(),
             },
           );
         } catch (e) {
@@ -1347,9 +1483,43 @@ class CoupleRepository extends ChangeNotifier {
               .eq('couple_id', _coupleId)
               .order('scheduled_at', ascending: false);
           if (datesRes.isNotEmpty) {
+            final serverDates = datesRes.map((d) => ScheduledIntimacy.fromJson(d)).toList();
+            for (final local in _scheduledDates) {
+              if (local.status == IntimacyStatus.accepted) {
+                final sIndex = serverDates.indexWhere((s) => s.id == local.id);
+                if (sIndex != -1 && serverDates[sIndex].status != IntimacyStatus.accepted) {
+                  try {
+                    await client.from('scheduled_intimacy').update({
+                      'status': 'accepted',
+                      'updated_at': DateTime.now().toIso8601String(),
+                    }).eq('id', local.id);
+                    serverDates[sIndex] = serverDates[sIndex].copyWith(status: IntimacyStatus.accepted);
+                  } catch (e) {
+                    debugPrint('Notice updating server date to accepted: $e');
+                  }
+                }
+              }
+            }
             _scheduledDates.clear();
-            for (final d in datesRes) {
-              _scheduledDates.add(ScheduledIntimacy.fromJson(d));
+            _scheduledDates.addAll(serverDates);
+          } else if (_scheduledDates.isNotEmpty) {
+            for (final d in _scheduledDates) {
+              try {
+                await client.from('scheduled_intimacy').upsert({
+                  'id': d.id,
+                  'couple_id': _coupleId,
+                  'proposed_by': d.proposedBy.isNotEmpty ? d.proposedBy : uid,
+                  'scheduled_at': d.scheduledAt.toIso8601String(),
+                  'status': d.status.name,
+                  'counter_scheduled_at': d.counterScheduledAt?.toIso8601String(),
+                  'response_note': d.responseNote,
+                  'vibe_check_status': d.vibeCheckStatus.name,
+                  'created_at': d.createdAt.toIso8601String(),
+                  'updated_at': DateTime.now().toIso8601String(),
+                });
+              } catch (e) {
+                debugPrint('Notice upserting local date: $e');
+              }
             }
           }
         } catch (e) {
@@ -1386,6 +1556,25 @@ class CoupleRepository extends ChangeNotifier {
             _memories.clear();
             for (final m in memoriesRes) {
               _memories.add(CoupleMemory.fromJson(m));
+            }
+          }
+          _ensureDateMemoriesExist();
+          for (final m in _memories) {
+            if (!memoriesRes.any((row) => row['id'] == m.id)) {
+              try {
+                await client.from('couple_memories').upsert({
+                  'id': m.id,
+                  'couple_id': _coupleId,
+                  'created_by': m.createdBy ?? uid,
+                  'type': m.type,
+                  'title': m.title,
+                  'description': m.description,
+                  'window_key': m.windowKey,
+                  'created_at': m.createdAt.toIso8601String(),
+                });
+              } catch (e) {
+                debugPrint('Notice upserting memory to Supabase: $e');
+              }
             }
           }
         } catch (e) {

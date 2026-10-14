@@ -150,6 +150,7 @@ class MemoriesInboxModal extends StatelessWidget {
                       final item = memories[index];
                       final isCelebrated = item.type == 'spark_celebrated';
                       final isMatch = item.type == 'spark_match';
+                      final isDate = item.type == 'date_night' || item.type == 'date_accepted';
 
                       return Container(
                         padding: const EdgeInsets.all(16),
@@ -158,14 +159,18 @@ class MemoriesInboxModal extends StatelessWidget {
                               ? const Color(0xFFFFF9F9)
                               : isMatch
                                   ? const Color(0xFFFFF0F3)
-                                  : Colors.white,
+                                  : isDate
+                                      ? const Color(0xFFFBF6FF)
+                                      : Colors.white,
                           borderRadius: BorderRadius.circular(18),
                           border: Border.all(
                             color: isCelebrated
                                 ? AppTheme.roseGold.withValues(alpha: 0.5)
                                 : isMatch
                                     ? const Color(0xFFFFB3C1)
-                                    : Colors.grey.shade200,
+                                    : isDate
+                                        ? const Color(0xFFD4B0E5)
+                                        : Colors.grey.shade200,
                             width: 1.5,
                           ),
                           boxShadow: [
@@ -186,7 +191,9 @@ class MemoriesInboxModal extends StatelessWidget {
                                     ? const Color(0xFFFFDF7D).withValues(alpha: 0.25)
                                     : isMatch
                                         ? const Color(0xFFFF1E56).withValues(alpha: 0.12)
-                                        : AppTheme.blush,
+                                        : isDate
+                                            ? const Color(0xFF9C27B0).withValues(alpha: 0.12)
+                                            : AppTheme.blush,
                                 shape: BoxShape.circle,
                               ),
                               child: Text(
@@ -194,7 +201,9 @@ class MemoriesInboxModal extends StatelessWidget {
                                     ? '🎉'
                                     : isMatch
                                         ? '🔥'
-                                        : '💕',
+                                        : isDate
+                                            ? '🥂'
+                                            : '💕',
                                 style: const TextStyle(fontSize: 20),
                               ),
                             ),

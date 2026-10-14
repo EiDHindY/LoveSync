@@ -24,8 +24,9 @@ void main() {
       expect(item.scheduledAt, equals(targetDate));
     });
 
-    test('Accept date changes status to accepted', () async {
+    test('Accept date changes status to accepted and creates memory in inbox', () async {
       final repo = CoupleRepository();
+      repo.setPartnerForTesting(isPaired: true, partnerName: 'Lola');
       final targetDate = DateTime.now().add(const Duration(days: 2));
 
       await repo.proposeDate(targetDate);
@@ -34,6 +35,10 @@ void main() {
       await repo.respondToDate(id, IntimacyStatus.accepted);
 
       expect(repo.scheduledDates.first.status, equals(IntimacyStatus.accepted));
+      expect(repo.memories.length, equals(1));
+      expect(repo.memories.first.type, equals('date_night'));
+      expect(repo.memories.first.title, equals('Date Night Confirmed! 🥂'));
+      expect(repo.unreadMemoriesCount, equals(1));
     });
 
     test('Raincheck converts softly to cuddle/movie with zero guilt', () async {
