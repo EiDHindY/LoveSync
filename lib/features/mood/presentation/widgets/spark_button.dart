@@ -571,14 +571,17 @@ class _SparkButtonState extends State<SparkButton>
                   ),
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  isLit
-                      ? 'Your spark is lit · Waiting for $partnerName...'
-                      : 'Your spark is unlit · $partnerName is unaware',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.plum,
+                Flexible(
+                  child: Text(
+                    isLit
+                        ? 'Your spark is lit · Waiting for $partnerName...'
+                        : 'Your spark is unlit · $partnerName is unaware',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.plum,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],

@@ -312,33 +312,44 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: const [
-                  Icon(Icons.psychology_rounded, size: 18, color: AppTheme.secondaryContainer),
-                  SizedBox(width: 6),
-                  Text(
-                    'DAILY SPARK QUESTION',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.1,
+              Expanded(
+                child: Row(
+                  children: const [
+                    Icon(Icons.psychology_rounded, size: 18, color: AppTheme.secondaryContainer),
+                    SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'DAILY SPARK QUESTION',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.8,
+                          color: AppTheme.deepBerry,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppTheme.surfaceContainer,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '$partnerName answered ✓',
+                    style: const TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
                       color: AppTheme.deepBerry,
                     ),
-                  ),
-                ],
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: AppTheme.surfaceContainer,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '$partnerName answered ✓',
-                  style: const TextStyle(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.deepBerry,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ),
@@ -358,16 +369,23 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: const [
-                  Icon(Icons.visibility_off_rounded, size: 14, color: AppTheme.onSurfaceVariant),
-                  SizedBox(width: 5),
-                  Text(
-                    'Reveals after both answer',
-                    style: TextStyle(fontSize: 11, color: AppTheme.onSurfaceVariant),
-                  ),
-                ],
+              Expanded(
+                child: Row(
+                  children: const [
+                    Icon(Icons.visibility_off_rounded, size: 14, color: AppTheme.onSurfaceVariant),
+                    SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        'Reveals after both answer',
+                        style: TextStyle(fontSize: 11, color: AppTheme.onSurfaceVariant),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.deepBerry,

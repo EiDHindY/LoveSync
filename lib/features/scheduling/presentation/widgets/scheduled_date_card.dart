@@ -169,37 +169,43 @@ class ScheduledDateCard extends StatelessWidget {
                   ),
                 ],
               ),
+              const SizedBox(width: 8),
               // Embedded Cycle Safety Pill
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: fertility.bgColor,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: fertility.color.withValues(alpha: 0.3)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 7,
-                      height: 7,
-                      decoration: BoxDecoration(
-                        color: fertility.color,
-                        shape: BoxShape.circle,
+              Flexible(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: fertility.bgColor,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: fertility.color.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 7,
+                        height: 7,
+                        decoration: BoxDecoration(
+                          color: fertility.color,
+                          shape: BoxShape.circle,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      fertility.dayOfCycle != null
-                          ? '${fertility.title} (Day ${fertility.dayOfCycle})'
-                          : fertility.title,
-                      style: TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w700,
-                        color: fertility.color,
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          fertility.dayOfCycle != null
+                              ? '${fertility.title} (Day ${fertility.dayOfCycle})'
+                              : fertility.title,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w700,
+                            color: fertility.color,
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -223,9 +229,12 @@ class ScheduledDateCard extends StatelessWidget {
             children: [
               Icon(Icons.calendar_today_rounded, size: 15, color: Colors.grey.shade600),
               const SizedBox(width: 6),
-              Text(
-                dateFormatted,
-                style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
+              Expanded(
+                child: Text(
+                  dateFormatted,
+                  style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
           ),
@@ -236,9 +245,12 @@ class ScheduledDateCard extends StatelessWidget {
             children: [
               Icon(Icons.location_on_rounded, size: 15, color: Colors.grey.shade600),
               const SizedBox(width: 6),
-              Text(
-                'L\'Aura Sky Lounge · Intimate Corner Table',
-                style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
+              Expanded(
+                child: Text(
+                  'L\'Aura Sky Lounge · Intimate Corner Table',
+                  style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
           ),
