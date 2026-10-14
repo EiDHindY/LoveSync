@@ -179,8 +179,12 @@ class CoupleRepository extends ChangeNotifier {
     }
   }
 
+  /// Logical intimacy date key (YYYY-MM-DD).
+  /// A day runs from 4:00 AM to 4:00 AM the next morning,
+  /// ensuring late-night sparks past midnight stay active together.
   String _dateKey(DateTime dt) {
-    return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+    final logical = dt.subtract(const Duration(hours: 4));
+    return '${logical.year}-${logical.month.toString().padLeft(2, '0')}-${logical.day.toString().padLeft(2, '0')}';
   }
 
   static const String _codeAlphabet = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -624,7 +628,7 @@ class CoupleRepository extends ChangeNotifier {
     return MoodStatus(
       userInTheMood: userMood,
       isMatch: isMatch,
-      signalDate: targetDate,
+      signalDate: targetDate.subtract(const Duration(hours: 4)),
       hasCouple: _isPaired,
       coupleId: _coupleId,
     );
@@ -658,6 +662,17 @@ class CoupleRepository extends ChangeNotifier {
         );
       } catch (e) {
         debugPrint('Broadcast error: $e');
+      }
+    }
+
+    if (SupabaseConfig.isInitialized && Supabase.instance.client.auth.currentUser != null) {
+      try {
+        await Supabase.instance.client.rpc('toggle_mood_signal', params: {
+          'p_date': key,
+          'p_in_the_mood': newMood,
+        });
+      } catch (e) {
+        debugPrint('Persist mood notice: $e');
       }
     }
 
