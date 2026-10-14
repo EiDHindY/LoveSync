@@ -294,8 +294,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     // 1. Double-Blind Mood Matching ("The Spark")
                     SparkButton(
                       moodStatus: mood,
-                      onToggle: () {
-                        ref.read(coupleRepositoryProvider.notifier).toggleMoodSignal();
+                      onToggle: () async {
+                        await ref.read(coupleRepositoryProvider.notifier).toggleMoodSignal();
                       },
                     ),
 

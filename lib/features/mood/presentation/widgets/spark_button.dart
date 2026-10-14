@@ -7,7 +7,7 @@ import 'package:love_app/features/mood/domain/mood_status.dart';
 
 class SparkButton extends StatefulWidget {
   final MoodStatus moodStatus;
-  final VoidCallback onToggle;
+  final FutureOr<void> Function() onToggle;
 
   const SparkButton({
     super.key,
@@ -19,10 +19,15 @@ class SparkButton extends StatefulWidget {
   State<SparkButton> createState() => _SparkButtonState();
 }
 
-class _SparkButtonState extends State<SparkButton> {
+class _SparkButtonState extends State<SparkButton>
+    with SingleTickerProviderStateMixin {
   late ConfettiController _confettiController;
+  late AnimationController _pulseController;
+  late Animation<double> _scaleAnimation;
+  late Animation<double> _glowAnimation;
   Timer? _countdownTimer;
   bool _previousMatch = false;
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -32,9 +37,41 @@ class _SparkButtonState extends State<SparkButton> {
     if (_previousMatch) {
       _confettiController.play();
     }
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+    _glowAnimation = Tween<double>(begin: 6.0, end: 22.0).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+
     _countdownTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) setState(() {});
     });
+  }
+
+  Future<void> _handleToggle() async {
+    if (_isLoading) return;
+    setState(() {
+      _isLoading = true;
+    });
+    HapticFeedback.mediumImpact();
+    _pulseController.repeat(reverse: true);
+
+    try {
+      await widget.onToggle();
+    } finally {
+      if (mounted) {
+        _pulseController.stop();
+        _pulseController.reset();
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -50,6 +87,7 @@ class _SparkButtonState extends State<SparkButton> {
   void dispose() {
     _countdownTimer?.cancel();
     _confettiController.dispose();
+    _pulseController.dispose();
     super.dispose();
   }
 
@@ -179,64 +217,100 @@ class _SparkButtonState extends State<SparkButton> {
 
               // Animated Spark Button Icon
               GestureDetector(
-                onTap: () {
-                  HapticFeedback.mediumImpact();
-                  widget.onToggle();
-                },
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 350),
-                  curve: Curves.easeInOut,
-                  width: 90,
-                  height: 90,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: isMatch
-                        ? const RadialGradient(
-                            colors: [Color(0xFFFFDF7D), Color(0xFFFF4081), Color(0xFFC0264D)],
-                          )
-                        : isLit
-                            ? const RadialGradient(
-                                colors: [Color(0xFFFF8A80), Color(0xFFC0264D)],
-                              )
-                            : null,
-                    color: (!isMatch && !isLit) ? AppTheme.blush : null,
-                    boxShadow: [
-                      BoxShadow(
-                        color: (isMatch || isLit
-                                ? AppTheme.crimson
-                                : AppTheme.roseGold)
-                            .withValues(alpha: 0.4),
-                        blurRadius: isMatch ? 28 : (isLit ? 16 : 8),
-                        spreadRadius: isMatch ? 4 : (isLit ? 2 : 0),
+                onTap: _isLoading ? null : _handleToggle,
+                child: AnimatedBuilder(
+                  animation: _pulseController,
+                  builder: (context, child) {
+                    final scale = _isLoading ? _scaleAnimation.value : 1.0;
+                    final extraGlow = _isLoading ? _glowAnimation.value : 0.0;
+
+                    return Transform.scale(
+                      scale: scale,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          if (_isLoading)
+                            SizedBox(
+                              width: 104,
+                              height: 104,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 3,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  isMatch || isLit ? Colors.white : AppTheme.crimson,
+                                ),
+                              ),
+                            ),
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 350),
+                            curve: Curves.easeInOut,
+                            width: 90,
+                            height: 90,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: isMatch
+                                  ? const RadialGradient(
+                                      colors: [Color(0xFFFFDF7D), Color(0xFFFF4081), Color(0xFFC0264D)],
+                                    )
+                                  : isLit
+                                      ? const RadialGradient(
+                                          colors: [Color(0xFFFF8A80), Color(0xFFC0264D)],
+                                        )
+                                      : (_isLoading
+                                          ? const RadialGradient(
+                                              colors: [Color(0xFFFF8A80), Color(0xFFC0264D)],
+                                            )
+                                          : null),
+                              color: (!isMatch && !isLit && !_isLoading) ? AppTheme.blush : null,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: (isMatch || isLit || _isLoading
+                                          ? AppTheme.crimson
+                                          : AppTheme.roseGold)
+                                      .withValues(alpha: 0.5),
+                                  blurRadius: (isMatch ? 28 : (isLit ? 16 : 8)) + extraGlow,
+                                  spreadRadius: (isMatch ? 4 : (isLit ? 2 : 0)) + (_isLoading ? 2 : 0),
+                                ),
+                              ],
+                            ),
+                            child: Center(
+                              child: _isLoading
+                                  ? Icon(
+                                      isLit ? Icons.power_settings_new_rounded : Icons.local_fire_department_rounded,
+                                      size: 46,
+                                      color: Colors.white,
+                                    )
+                                  : Icon(
+                                      isMatch
+                                          ? Icons.local_fire_department_rounded
+                                          : isLit
+                                              ? Icons.favorite_rounded
+                                              : Icons.favorite_outline_rounded,
+                                      size: 46,
+                                      color: (isMatch || isLit) ? Colors.white : AppTheme.crimson,
+                                    ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  child: Center(
-                    child: Icon(
-                      isMatch
-                          ? Icons.local_fire_department_rounded
-                          : isLit
-                              ? Icons.favorite_rounded
-                              : Icons.favorite_outline_rounded,
-                      size: 46,
-                      color: (isMatch || isLit) ? Colors.white : AppTheme.crimson,
-                    ),
-                  ),
+                    );
+                  },
                 ),
               ),
               const SizedBox(height: 18),
 
               // Status Title
               Text(
-                isMatch
-                    ? "IT'S A MATCH! 🔥"
-                    : isLit
-                        ? 'Your Spark is Lit ✨'
-                        : 'In the mood $timeLabel?',
+                _isLoading
+                    ? (isLit ? 'Turning off spark... ✨' : 'Lighting your spark... 🔥')
+                    : isMatch
+                        ? "IT'S A MATCH! 🔥"
+                        : isLit
+                            ? 'Your Spark is Lit ✨'
+                            : 'In the mood $timeLabel?',
                 style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
-                  color: (isMatch || isLit) ? Colors.white : AppTheme.plum,
+                  color: (isMatch || isLit || _isLoading) ? Colors.white : AppTheme.plum,
                 ),
               ),
 
@@ -307,22 +381,44 @@ class _SparkButtonState extends State<SparkButton> {
                             ? Colors.white
                             : Colors.white,
                     elevation: isMatch ? 4 : 1,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
-                  onPressed: () {
-                    HapticFeedback.lightImpact();
-                    widget.onToggle();
-                  },
-                  child: Text(
-                    isMatch
-                        ? 'Celebrate! 🎉 (Tap to turn off)'
-                        : isLit
-                            ? 'Turn Off Spark'
-                            : 'Light My Spark for $timeLabel',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: isMatch ? AppTheme.crimson : Colors.white,
-                    ),
-                  ),
+                  onPressed: _isLoading ? null : _handleToggle,
+                  child: _isLoading
+                      ? Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  isMatch ? AppTheme.crimson : Colors.white,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              isLit ? 'Updating spark...' : 'Igniting your spark... ✨',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: isMatch ? AppTheme.crimson : Colors.white,
+                              ),
+                            ),
+                          ],
+                        )
+                      : Text(
+                          isMatch
+                              ? 'Celebrate! 🎉 (Tap to turn off)'
+                              : isLit
+                                  ? 'Turn Off Spark'
+                                  : 'Light My Spark for $timeLabel',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: isMatch ? AppTheme.crimson : Colors.white,
+                          ),
+                        ),
                 ),
               ),
             ],
