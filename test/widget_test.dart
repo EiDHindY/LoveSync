@@ -12,7 +12,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  testWidgets('LoveSyncApp on first launch renders CreateProfileScreen with Google Sign-In', (WidgetTester tester) async {
+  testWidgets('LoveSyncApp on first launch renders WelcomeScreen with Get Started and Log In', (WidgetTester tester) async {
     await tester.pumpWidget(
       const ProviderScope(
         child: LoveSyncApp(),
@@ -20,10 +20,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Verify first launch Google sign-in gate
-    expect(find.text('Welcome to LoveSync'), findsOneWidget);
-    expect(find.text('WELCOME • SIGN IN TO START'), findsOneWidget);
-    expect(find.text('Continue with Google'), findsOneWidget);
+    // Verify first launch WelcomeScreen gate
+    expect(find.text('LoveSync'), findsOneWidget);
+    expect(find.text('Get Started'), findsOneWidget);
+    expect(find.textContaining('Log In'), findsOneWidget);
   });
 
   testWidgets('LoveSyncApp shows profile completion once authenticated', (WidgetTester tester) async {
@@ -42,7 +42,7 @@ void main() {
 
     // Verify Step 1: Complete profile once signed in
     expect(find.text('Complete Your Profile'), findsOneWidget);
-    expect(find.text('STEP 1 OF 2 • COMPLETE YOUR PROFILE'), findsOneWidget);
+    expect(find.text('COMPLETE YOUR PROFILE'), findsOneWidget);
     expect(find.text('YOUR NAME OR NICKNAME'), findsOneWidget);
     expect(find.text('I Track My Cycle'), findsOneWidget);
     expect(find.text('I Do Not Track'), findsOneWidget);

@@ -95,7 +95,7 @@ void main() {
 
     // Verify "Add Partner" button is present and "My Partner" is not
     expect(find.text('Add Partner'), findsWidgets);
-    expect(find.text('Individual Mode • No partner connected'), findsOneWidget);
+    expect(find.text('Connect Your Partner'), findsOneWidget);
     expect(find.text('My Partner'), findsNothing);
 
     // Tap on Add Partner in AppBar
@@ -122,8 +122,8 @@ void main() {
     // Verify Tab 1 (Sex & Intimacy) is visible initially
     expect(find.text('Sex & Intimacy'), findsOneWidget);
     expect(find.text('Cycle & Period'), findsOneWidget);
-    expect(find.text('In the mood tonight?'), findsOneWidget);
-    expect(find.text('Light My Spark for Tonight'), findsOneWidget);
+    expect(find.textContaining('In the mood'), findsOneWidget);
+    expect(find.textContaining('Light My Spark'), findsOneWidget);
 
     // Tap on Cycle & Period tab
     await tester.tap(find.text('Cycle & Period'));

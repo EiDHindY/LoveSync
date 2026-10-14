@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import 'package:love_app/core/config/supabase_config.dart';
 import 'package:love_app/core/services/notification_service.dart';
+import 'package:love_app/features/memories/domain/couple_memory.dart';
 import 'package:love_app/features/mood/domain/mood_status.dart';
 import 'package:love_app/features/scheduling/domain/scheduled_intimacy.dart';
 
@@ -45,6 +46,9 @@ class CoupleRepository extends ChangeNotifier {
 
   // Scheduled Intimacy List
   final List<ScheduledIntimacy> _scheduledDates = [];
+
+  // Couple Memories & Spark History
+  final List<CoupleMemory> _memories = [];
 
   RealtimeChannel? _realtimeChannel;
 
@@ -96,6 +100,7 @@ class CoupleRepository extends ChangeNotifier {
   int get periodLength => _periodLength;
   int get safetyBufferDays => _safetyBufferDays;
   List<ScheduledIntimacy> get scheduledDates => List.unmodifiable(_scheduledDates);
+  List<CoupleMemory> get memories => List.unmodifiable(_memories);
 
   CoupleRepository() {
     _initAuthListener();
@@ -476,12 +481,67 @@ class CoupleRepository extends ChangeNotifier {
                 final isMatch = userMood && inTheMood;
 
                 if (isMatch) {
+                  final matchMem = CoupleMemory(
+                    id: _uuid.v4(),
+                    coupleId: _coupleId,
+                    createdBy: senderId,
+                    type: 'spark_match',
+                    title: "Spark Ignited! 🔥",
+                    description: "Mutual match! Both of you lit your sparks.",
+                    windowKey: dateKey,
+                    createdAt: DateTime.now(),
+                  );
+                  if (!_memories.any((m) => m.windowKey == dateKey && m.type == 'spark_match')) {
+                    _memories.insert(0, matchMem);
+                  }
+
                   NotificationService().showNotification(
                     id: 1,
                     title: "It's a Match! 🔥",
                     body: "Both of you are in the mood tonight! The spark is ignited.",
                   );
                 }
+                await _saveToStorage();
+                notifyListeners();
+              }
+            },
+          )
+          .onBroadcast(
+            event: 'spark_turned_off',
+            callback: (payload) async {
+              final senderId = payload['sender_id'] as String?;
+              final dateKey = payload['date'] as String?;
+              final memoryJson = payload['memory'] as Map<String, dynamic>?;
+
+              if (dateKey != null && senderId != null && senderId != _currentUserId) {
+                _moodSignals.putIfAbsent(dateKey, () => {});
+                _moodSignals[dateKey]![senderId] = false;
+                _moodSignals[dateKey]![_currentUserId] = false;
+
+                if (memoryJson != null) {
+                  final partnerMem = CoupleMemory.fromJson(memoryJson);
+                  _memories.removeWhere((m) => m.id == partnerMem.id || (m.windowKey == dateKey && m.type == 'spark_celebrated'));
+                  _memories.insert(0, partnerMem);
+                } else {
+                  final celMem = CoupleMemory(
+                    id: _uuid.v4(),
+                    coupleId: _coupleId,
+                    createdBy: senderId,
+                    type: 'spark_celebrated',
+                    title: 'Spark Celebrated! 🎉',
+                    description: '${payload['sender_name'] ?? 'Your partner'} celebrated the spark.',
+                    windowKey: dateKey,
+                    createdAt: DateTime.now(),
+                  );
+                  _memories.removeWhere((m) => m.windowKey == dateKey && m.type == 'spark_celebrated');
+                  _memories.insert(0, celMem);
+                }
+
+                NotificationService().showNotification(
+                  id: 4,
+                  title: 'Spark Celebrated! 🎉',
+                  body: '${payload['sender_name'] ?? 'Your partner'} celebrated the spark and turned it off.',
+                );
                 await _saveToStorage();
                 notifyListeners();
               }
@@ -578,6 +638,14 @@ class CoupleRepository extends ChangeNotifier {
             _scheduledDates.add(ScheduledIntimacy.fromJson(item as Map<String, dynamic>));
           }
         }
+
+        if (data['memories'] != null) {
+          final rawMemories = data['memories'] as List<dynamic>;
+          _memories.clear();
+          for (final item in rawMemories) {
+            _memories.add(CoupleMemory.fromJson(item as Map<String, dynamic>));
+          }
+        }
         notifyListeners();
       }
     } catch (e) {
@@ -613,6 +681,7 @@ class CoupleRepository extends ChangeNotifier {
         'safetyBufferDays': _safetyBufferDays,
         'moodSignals': _moodSignals,
         'scheduledDates': _scheduledDates.map((e) => e.toJson()).toList(),
+        'memories': _memories.map((e) => e.toJson()).toList(),
       };
       await prefs.setString(_kPrefKey, jsonEncode(data));
     } catch (e) {
@@ -683,6 +752,19 @@ class CoupleRepository extends ChangeNotifier {
           final serverMatch = res['is_match'] == true;
           if (serverMatch && !isMatch) {
             _moodSignals[key]![_partnerId] = true;
+            final matchMem = CoupleMemory(
+              id: _uuid.v4(),
+              coupleId: _coupleId,
+              createdBy: _currentUserId,
+              type: 'spark_match',
+              title: "Spark Ignited! 🔥",
+              description: "Mutual match! Both of you lit your sparks.",
+              windowKey: key,
+              createdAt: DateTime.now(),
+            );
+            if (!_memories.any((m) => m.windowKey == key && m.type == 'spark_match')) {
+              _memories.insert(0, matchMem);
+            }
             await _saveToStorage();
             NotificationService().showNotification(
               id: 1,
@@ -698,11 +780,82 @@ class CoupleRepository extends ChangeNotifier {
     }
 
     if (isMatch) {
+      final matchMem = CoupleMemory(
+        id: _uuid.v4(),
+        coupleId: _coupleId,
+        createdBy: _currentUserId,
+        type: 'spark_match',
+        title: "Spark Ignited! 🔥",
+        description: "Mutual match! Both of you lit your sparks.",
+        windowKey: key,
+        createdAt: DateTime.now(),
+      );
+      if (!_memories.any((m) => m.windowKey == key && m.type == 'spark_match')) {
+        _memories.insert(0, matchMem);
+      }
       NotificationService().showNotification(
         id: 1,
         title: "It's a Match! 🔥",
         body: "Both of you are in the mood tonight! The spark is ignited.",
       );
+    }
+
+    notifyListeners();
+    return getDailyMoodStatus(targetDate);
+  }
+
+  Future<MoodStatus> turnOffSparkMatch([DateTime? date]) async {
+    final targetDate = date ?? DateTime.now();
+    final key = _dateKey(targetDate);
+    _moodSignals.putIfAbsent(key, () => {});
+
+    // Reset mood for both partners
+    _moodSignals[key]![_currentUserId] = false;
+    if (_partnerId.isNotEmpty) {
+      _moodSignals[key]![_partnerId] = false;
+    }
+
+    final partnerDisplay = _partnerName.isNotEmpty ? _partnerName : 'Your partner';
+    final celMem = CoupleMemory(
+      id: _uuid.v4(),
+      coupleId: _coupleId,
+      createdBy: _currentUserId,
+      type: 'spark_celebrated',
+      title: 'Spark Celebrated! 🎉',
+      description: 'You and $partnerDisplay celebrated this spark!',
+      windowKey: key,
+      createdAt: DateTime.now(),
+    );
+    _memories.removeWhere((m) => m.windowKey == key && m.type == 'spark_celebrated');
+    _memories.insert(0, celMem);
+
+    await _saveToStorage();
+
+    // Broadcast spark_turned_off across Supabase Realtime channel
+    if (_realtimeChannel != null) {
+      try {
+        await _realtimeChannel!.sendBroadcastMessage(
+          event: 'spark_turned_off',
+          payload: {
+            'sender_id': _currentUserId,
+            'sender_name': _currentUserName,
+            'date': key,
+            'memory': celMem.toJson(),
+          },
+        );
+      } catch (e) {
+        debugPrint('Broadcast error: $e');
+      }
+    }
+
+    if (SupabaseConfig.isInitialized && Supabase.instance.client.auth.currentUser != null) {
+      try {
+        await Supabase.instance.client.rpc('turn_off_spark_match', params: {
+          'p_window': key,
+        });
+      } catch (e) {
+        debugPrint('Persist turn off spark notice: $e');
+      }
     }
 
     notifyListeners();
@@ -1085,6 +1238,7 @@ class CoupleRepository extends ChangeNotifier {
     _inviteCode = '';
     _moodSignals.clear();
     _scheduledDates.clear();
+    _memories.clear();
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kPrefKey);
     notifyListeners();
@@ -1194,6 +1348,23 @@ class CoupleRepository extends ChangeNotifier {
           debugPrint('Notice fetching mood window status: $e');
         }
 
+        // Fetch couple memories
+        try {
+          final memoriesRes = await client
+              .from('couple_memories')
+              .select()
+              .eq('couple_id', _coupleId)
+              .order('created_at', ascending: false);
+          if (memoriesRes.isNotEmpty) {
+            _memories.clear();
+            for (final m in memoriesRes) {
+              _memories.add(CoupleMemory.fromJson(m));
+            }
+          }
+        } catch (e) {
+          debugPrint('Notice fetching couple memories: $e');
+        }
+
         if (_isPaired) {
           _hasCreatedProfile = true;
           _hasCompletedOnboarding = true;
@@ -1251,6 +1422,7 @@ class CoupleRepository extends ChangeNotifier {
     _inviteCode = '';
     _moodSignals.clear();
     _scheduledDates.clear();
+    _memories.clear();
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kPrefKey);
     notifyListeners();

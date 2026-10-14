@@ -89,5 +89,42 @@ void main() {
       expect(repo.getDailyMoodStatus().isMatch, isFalse);
       expect(repo.getDailyMoodStatus().userInTheMood, isTrue);
     });
+
+    test('Mutual match logs spark_match memory, and turnOffSparkMatch turns off both and logs spark_celebrated', () async {
+      final repo = CoupleRepository();
+      await repo.setupNewUser(displayName: 'Husband', role: 'husband');
+      await repo.pairWithCode('LOVE-1234');
+
+      // Partner A lights spark
+      await repo.toggleMoodSignal();
+      expect(repo.memories, isEmpty);
+
+      // Partner B lights spark -> triggers mutual match
+      repo.switchPartnerView();
+      await repo.toggleMoodSignal();
+      expect(repo.getDailyMoodStatus().isMatch, isTrue);
+
+      // Verify spark_match memory is logged in inbox
+      expect(repo.memories.length, 1);
+      expect(repo.memories.first.type, 'spark_match');
+      expect(repo.memories.first.title, contains('Spark Ignited'));
+
+      // Partner B celebrates & turns off spark match
+      await repo.turnOffSparkMatch();
+
+      // Verify spark is turned off on Partner B's device
+      expect(repo.getDailyMoodStatus().isMatch, isFalse);
+      expect(repo.getDailyMoodStatus().userInTheMood, isFalse);
+
+      // Verify spark is turned off on Partner A's device as well
+      repo.switchPartnerView();
+      expect(repo.getDailyMoodStatus().isMatch, isFalse);
+      expect(repo.getDailyMoodStatus().userInTheMood, isFalse);
+
+      // Verify spark_celebrated memory is logged in inbox
+      expect(repo.memories.length, 2);
+      expect(repo.memories.first.type, 'spark_celebrated');
+      expect(repo.memories.first.title, contains('Spark Celebrated'));
+    });
   });
 }

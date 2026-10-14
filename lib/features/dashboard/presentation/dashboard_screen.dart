@@ -17,6 +17,7 @@ import 'package:love_app/features/scheduling/domain/scheduled_intimacy.dart';
 import 'package:love_app/features/scheduling/presentation/schedule_date_modal.dart';
 import 'package:love_app/features/scheduling/presentation/widgets/scheduled_date_card.dart';
 import 'package:love_app/features/onboarding/presentation/create_profile_screen.dart';
+import 'package:love_app/features/memories/presentation/memories_inbox_modal.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -120,6 +121,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           );
         },
       ),
+    );
+  }
+
+  void _openMemoriesModal(BuildContext context) {
+    final memories = ref.read(coupleMemoriesProvider);
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => MemoriesInboxModal(memories: memories),
     );
   }
 
@@ -295,9 +306,74 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     SparkButton(
                       moodStatus: mood,
                       onToggle: () async {
-                        await ref.read(coupleRepositoryProvider.notifier).toggleMoodSignal();
+                        if (mood.isMatch) {
+                          await ref.read(coupleRepositoryProvider.notifier).turnOffSparkMatch();
+                        } else {
+                          await ref.read(coupleRepositoryProvider.notifier).toggleMoodSignal();
+                        }
                       },
                     ),
+
+                    if (ref.watch(coupleMemoriesProvider).isNotEmpty) ...[
+                      const SizedBox(height: 14),
+                      InkWell(
+                        onTap: () => _openMemoriesModal(context),
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: AppTheme.roseGold.withValues(alpha: 0.4)),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.02),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(7),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.crimson.withValues(alpha: 0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.mark_email_unread_rounded, size: 16, color: AppTheme.crimson),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Spark & Memory Inbox (${ref.watch(coupleMemoriesProvider).length})',
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppTheme.plum,
+                                      ),
+                                    ),
+                                    Text(
+                                      ref.watch(coupleMemoriesProvider).first.title,
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Icon(Icons.chevron_right_rounded, color: Colors.grey, size: 18),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
 
                     const SizedBox(height: 20),
 
@@ -403,6 +479,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final fertility = ref.watch(todayFertilityProvider);
     final mood = ref.watch(todayMoodStatusProvider);
     final scheduledDates = ref.watch(scheduledDatesProvider);
+    final memories = ref.watch(coupleMemoriesProvider);
     final nextDate = scheduledDates.isNotEmpty ? scheduledDates.first : null;
 
     if (repo.isPaired && repo.partnerName.isEmpty) {
@@ -447,6 +524,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'Memories & Spark Inbox',
+            icon: Badge(
+              isLabelVisible: memories.isNotEmpty,
+              label: Text(
+                '${memories.length}',
+                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+              ),
+              backgroundColor: AppTheme.crimson,
+              child: const Icon(Icons.mark_email_unread_outlined, color: AppTheme.plum, size: 22),
+            ),
+            onPressed: () => _openMemoriesModal(context),
+          ),
           if (repo.isPaired)
             InkWell(
               onTap: () => _openPartnerModal(context),
@@ -529,7 +619,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             padding: const EdgeInsets.only(right: 6),
             icon: const Icon(Icons.more_vert, color: AppTheme.plum),
             onSelected: (val) async {
-              if (val == 'partner_info') {
+              if (val == 'memories') {
+                _openMemoriesModal(context);
+              } else if (val == 'partner_info') {
                 _openPartnerModal(context);
               } else if (val == 'edit_profile') {
                 await ref.read(coupleRepositoryProvider.notifier).returnToProfileSetup();
@@ -550,6 +642,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               }
             },
             itemBuilder: (ctx) => [
+              PopupMenuItem(
+                value: 'memories',
+                child: Row(
+                  children: [
+                    const Icon(Icons.mark_email_unread_outlined, size: 18, color: AppTheme.crimson),
+                    const SizedBox(width: 8),
+                    Text('Memories Inbox (${memories.length})'),
+                  ],
+                ),
+              ),
               if (repo.isPaired)
                 PopupMenuItem(
                   value: 'partner_info',

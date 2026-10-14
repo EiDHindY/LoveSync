@@ -53,7 +53,7 @@ void main() {
     expect(find.text('user@example.com'), findsOneWidget);
     expect(find.text('Sign out'), findsOneWidget);
     expect(find.text('YOUR NAME OR NICKNAME'), findsOneWidget);
-    expect(find.text('Continue to Step 2 • Connect Partner'), findsOneWidget);
+    expect(find.text('Continue to Dashboard'), findsOneWidget);
     expect(find.text('Continue with Google'), findsNothing);
     expect(find.text('Privacy PIN & Backup (Optional)'), findsNothing);
   });

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/legacy.dart';
 import 'package:love_app/core/services/couple_repository.dart';
 import 'package:love_app/features/cycle/domain/cycle_engine.dart';
 import 'package:love_app/features/cycle/domain/fertility_status.dart';
+import 'package:love_app/features/memories/domain/couple_memory.dart';
 import 'package:love_app/features/mood/domain/mood_status.dart';
 import 'package:love_app/features/scheduling/domain/scheduled_intimacy.dart';
 
@@ -29,4 +30,9 @@ final todayMoodStatusProvider = Provider<MoodStatus>((ref) {
 final scheduledDatesProvider = Provider<List<ScheduledIntimacy>>((ref) {
   final repo = ref.watch(coupleRepositoryProvider);
   return repo.scheduledDates;
+});
+
+final coupleMemoriesProvider = Provider<List<CoupleMemory>>((ref) {
+  final repo = ref.watch(coupleRepositoryProvider);
+  return repo.memories;
 });
