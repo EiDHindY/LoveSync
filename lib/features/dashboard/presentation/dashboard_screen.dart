@@ -414,13 +414,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     return Scaffold(
       appBar: AppBar(
         centerTitle: false,
-        titleSpacing: 12,
+        titleSpacing: 8,
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 28,
-              height: 28,
+              width: 26,
+              height: 26,
               decoration: BoxDecoration(
                 color: AppTheme.blush,
                 shape: BoxShape.circle,
@@ -430,15 +430,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ),
               ),
               child: const Center(
-                child: Icon(Icons.favorite_rounded, color: AppTheme.crimson, size: 16),
+                child: Icon(Icons.favorite_rounded, color: AppTheme.crimson, size: 15),
               ),
             ),
-            const SizedBox(width: 8),
-            const Text(
-              'LoveSync',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
+            const SizedBox(width: 6),
+            const Flexible(
+              child: Text(
+                'LoveSync',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 17,
+                ),
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],

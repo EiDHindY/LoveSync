@@ -462,7 +462,7 @@ class CoupleRepository extends ChangeNotifier {
           )
           .onBroadcast(
             event: 'mood_signal',
-            callback: (payload) {
+            callback: (payload) async {
               final senderId = payload['sender_id'] as String?;
               final dateKey = payload['date'] as String?;
               final inTheMood = payload['in_the_mood'] as bool? ?? false;
@@ -482,6 +482,7 @@ class CoupleRepository extends ChangeNotifier {
                     body: "Both of you are in the mood tonight! The spark is ignited.",
                   );
                 }
+                await _saveToStorage();
                 notifyListeners();
               }
             },
@@ -674,10 +675,23 @@ class CoupleRepository extends ChangeNotifier {
 
     if (SupabaseConfig.isInitialized && Supabase.instance.client.auth.currentUser != null) {
       try {
-        await Supabase.instance.client.rpc('toggle_mood_signal', params: {
-          'p_date': key,
+        final res = await Supabase.instance.client.rpc('toggle_mood_window', params: {
+          'p_window': key,
           'p_in_the_mood': newMood,
         });
+        if (res != null && res is Map) {
+          final serverMatch = res['is_match'] == true;
+          if (serverMatch && !isMatch) {
+            _moodSignals[key]![_partnerId] = true;
+            await _saveToStorage();
+            NotificationService().showNotification(
+              id: 1,
+              title: "It's a Match! 🔥",
+              body: "Both of you are in the mood tonight! The spark is ignited.",
+            );
+            notifyListeners();
+          }
+        }
       } catch (e) {
         debugPrint('Persist mood notice: $e');
       }
@@ -1159,6 +1173,25 @@ class CoupleRepository extends ChangeNotifier {
           }
         } catch (e) {
           debugPrint('Notice fetching scheduled dates: $e');
+        }
+
+        // Fetch current mood window status
+        try {
+          final currentKey = _dateKey(DateTime.now());
+          final moodRes = await client.rpc('get_mood_window_status', params: {
+            'p_window': currentKey,
+          });
+          if (moodRes != null && moodRes is Map) {
+            final userMood = moodRes['user_mood'] == true;
+            final isMatch = moodRes['is_match'] == true;
+            _moodSignals.putIfAbsent(currentKey, () => {});
+            _moodSignals[currentKey]![_currentUserId] = userMood;
+            if (isMatch && _partnerId.isNotEmpty) {
+              _moodSignals[currentKey]![_partnerId] = true;
+            }
+          }
+        } catch (e) {
+          debugPrint('Notice fetching mood window status: $e');
         }
 
         if (_isPaired) {

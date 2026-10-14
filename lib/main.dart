@@ -50,6 +50,7 @@ class LoveSyncApp extends ConsumerWidget {
 
     return MaterialApp(
       title: 'LoveSync',
+      scaffoldMessengerKey: rootScaffoldMessengerKey,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       home: homeScreen,
