@@ -16,7 +16,7 @@ class UpdateDialog extends StatefulWidget {
   static Future<void> show(BuildContext context, AppUpdateInfo info) {
     return showDialog(
       context: context,
-      barrierDismissible: false,
+      barrierDismissible: true,
       builder: (_) => UpdateDialog(updateInfo: info),
     );
   }
@@ -27,6 +27,7 @@ class UpdateDialog extends StatefulWidget {
 
 class _UpdateDialogState extends State<UpdateDialog> {
   bool _isDownloading = false;
+  bool _installerLaunched = false;
   double _progress = 0.0;
   String _statusText = '';
   String? _errorMessage;
@@ -46,6 +47,7 @@ class _UpdateDialogState extends State<UpdateDialog> {
 
     setState(() {
       _isDownloading = true;
+      _installerLaunched = false;
       _errorMessage = null;
       _progress = 0.0;
       _statusText = 'Starting download...';
@@ -66,7 +68,9 @@ class _UpdateDialogState extends State<UpdateDialog> {
             case OtaStatus.INSTALLING:
               setState(() {
                 _progress = 1.0;
-                _statusText = 'Preparing installer... Please confirm installation.';
+                _isDownloading = false;
+                _installerLaunched = true;
+                _statusText = 'Installer launched! Please confirm the prompt on your screen.';
               });
               break;
             case OtaStatus.ALREADY_RUNNING_ERROR:
@@ -188,7 +192,7 @@ class _UpdateDialogState extends State<UpdateDialog> {
             const SizedBox(height: 14),
 
             // Downloading Progress Indicator
-            if (_isDownloading) ...[
+            if (_isDownloading || _installerLaunched) ...[
               LinearProgressIndicator(
                 value: _progress > 0 ? _progress : null,
                 backgroundColor: AppTheme.blush,
@@ -199,6 +203,7 @@ class _UpdateDialogState extends State<UpdateDialog> {
               const SizedBox(height: 8),
               Text(
                 _statusText,
+                textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -217,6 +222,41 @@ class _UpdateDialogState extends State<UpdateDialog> {
                   ),
                 ),
               ],
+              const SizedBox(height: 14),
+            ],
+
+            // Installer guidance notice
+            if (_installerLaunched) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF6FF),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF93C5FD)),
+                ),
+                child: const Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.info_outline_rounded, color: Color(0xFF2563EB), size: 16),
+                        SizedBox(width: 6),
+                        Text(
+                          'Installer Prompted',
+                          style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: Color(0xFF1D4ED8)),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 5),
+                    Text(
+                      'If Android reports an incompatible update signature, uninstall the older build once to migrate to the permanent release key.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 11, color: Color(0xFF1E40AF), height: 1.3),
+                    ),
+                  ],
+                ),
+              ),
               const SizedBox(height: 14),
             ],
 
@@ -269,9 +309,9 @@ class _UpdateDialogState extends State<UpdateDialog> {
                         side: BorderSide(color: Colors.grey.shade300),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       ),
-                      child: const Text(
-                        'Later',
-                        style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
+                      child: Text(
+                        _installerLaunched ? 'Close' : 'Later',
+                        style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
                       ),
                     ),
                   ),
@@ -288,7 +328,11 @@ class _UpdateDialogState extends State<UpdateDialog> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
                     child: Text(
-                      _isDownloading ? 'Updating...' : 'Update Now',
+                      _isDownloading
+                          ? 'Updating...'
+                          : _installerLaunched
+                              ? 'Retry Install'
+                              : 'Update Now',
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ),

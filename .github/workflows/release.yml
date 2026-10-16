@@ -46,7 +46,7 @@ jobs:
         run: flutter build apk --release
 
       - name: Build Split per ABI APKs
-        run: flutter build apk --split-per-abi
+        run: flutter build apk --split-per-abi -P force-version-code-ignoring-abi=true
 
       - name: Prepare APK Artifacts
         run: |
