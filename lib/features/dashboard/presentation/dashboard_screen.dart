@@ -268,11 +268,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with WidgetsB
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-        ),
+      builder: (ctx) {
+        bool isCheckingUpdate = false;
+        bool isLatestConfirmed = false;
+        return StatefulBuilder(
+          builder: (modalCtx, setModalState) => Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            ),
         padding: EdgeInsets.only(
           top: 20,
           left: 24,
@@ -575,81 +579,133 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with WidgetsB
                     builder: (context, snapshot) {
                       final version = snapshot.data ?? '1.0.1';
                       final hasUpdate = _availableUpdate != null && _availableUpdate!.hasUpdate;
-                      return InkWell(
-                        onTap: () async {
-                          final messenger = ScaffoldMessenger.of(context);
-                          if (hasUpdate) {
-                            Navigator.of(ctx).pop();
-                            UpdateDialog.show(context, _availableUpdate!);
-                            return;
-                          }
-                          final updateInfo = await UpdateService.checkForUpdate();
-                          if (!context.mounted) return;
-                          if (updateInfo != null && updateInfo.hasUpdate) {
-                            setState(() => _availableUpdate = updateInfo);
-                            Navigator.of(ctx).pop();
-                            UpdateDialog.show(context, updateInfo);
-                          } else {
-                            messenger.showSnackBar(
-                              SnackBar(
-                                backgroundColor: AppTheme.plum,
-                                content: Text('You are on the latest version! (v$version) ✨'),
-                                duration: const Duration(seconds: 3),
-                              ),
-                            );
-                          }
-                        },
-                        borderRadius: BorderRadius.circular(12),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 2),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: hasUpdate ? AppTheme.crimson.withValues(alpha: 0.15) : AppTheme.blush,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  hasUpdate ? Icons.rocket_launch_rounded : Icons.system_update_rounded,
-                                  size: 20,
-                                  color: AppTheme.crimson,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      'App Version',
-                                      style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold),
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          InkWell(
+                            onTap: isCheckingUpdate
+                                ? null
+                                : () async {
+                                    if (hasUpdate) {
+                                      Navigator.of(ctx).pop();
+                                      UpdateDialog.show(context, _availableUpdate!);
+                                      return;
+                                    }
+                                    setModalState(() {
+                                      isCheckingUpdate = true;
+                                      isLatestConfirmed = false;
+                                    });
+                                    final updateInfo = await UpdateService.checkForUpdate();
+                                    if (!context.mounted) return;
+                                    if (updateInfo != null && updateInfo.hasUpdate) {
+                                      setState(() => _availableUpdate = updateInfo);
+                                      Navigator.of(ctx).pop();
+                                      UpdateDialog.show(context, updateInfo);
+                                    } else {
+                                      setModalState(() {
+                                        isCheckingUpdate = false;
+                                        isLatestConfirmed = true;
+                                      });
+                                    }
+                                  },
+                            borderRadius: BorderRadius.circular(12),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 2),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: hasUpdate ? AppTheme.crimson.withValues(alpha: 0.15) : AppTheme.blush,
+                                      shape: BoxShape.circle,
                                     ),
-                                    Text(
-                                      'LoveSync v$version',
-                                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppTheme.plum),
+                                    child: Icon(
+                                      hasUpdate ? Icons.rocket_launch_rounded : Icons.system_update_rounded,
+                                      size: 20,
+                                      color: AppTheme.crimson,
                                     ),
-                                  ],
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                decoration: BoxDecoration(
-                                  color: hasUpdate ? AppTheme.crimson : AppTheme.blush.withValues(alpha: 0.6),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  hasUpdate ? 'Update (v${_availableUpdate!.latestVersion}) 🚀' : 'Check Updates',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: hasUpdate ? Colors.white : AppTheme.crimson,
                                   ),
-                                ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'App Version',
+                                          style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold),
+                                        ),
+                                        Text(
+                                          'LoveSync v$version',
+                                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppTheme.plum),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                    decoration: BoxDecoration(
+                                      color: hasUpdate
+                                          ? AppTheme.crimson
+                                          : isLatestConfirmed
+                                              ? const Color(0xFFDCFCE7)
+                                              : AppTheme.blush.withValues(alpha: 0.6),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: isCheckingUpdate
+                                        ? const SizedBox(
+                                            width: 14,
+                                            height: 14,
+                                            child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.crimson),
+                                          )
+                                        : Text(
+                                            hasUpdate
+                                                ? 'Update (v${_availableUpdate!.latestVersion}) 🚀'
+                                                : isLatestConfirmed
+                                                    ? '✓ Up to date'
+                                                    : 'Check Updates',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                              color: hasUpdate
+                                                  ? Colors.white
+                                                  : isLatestConfirmed
+                                                      ? const Color(0xFF16A34A)
+                                                      : AppTheme.crimson,
+                                            ),
+                                          ),
+                                  ),
+                                ],
                               ),
-                            ],
+                            ),
                           ),
-                        ),
+                          if (isLatestConfirmed) ...[
+                            const SizedBox(height: 10),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF0FDF4),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: const Color(0xFF86EFAC), width: 1.2),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 16),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'You are on the latest version! (v$version) ✨',
+                                    style: const TextStyle(
+                                      color: Color(0xFF15803D),
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
                       );
                     },
                   ),
@@ -684,9 +740,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with WidgetsB
                 ),
               ),
           ],
-          ),
         ),
       ),
+    ),
+  );
+      },
     );
   }
 
