@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:love_app/core/theme/app_theme.dart';
+import 'package:love_app/features/cycle/presentation/widgets/cycle_calculation_dialog.dart';
 
 class MedicalDisclaimer {
   static const String shortBanner =
@@ -64,6 +65,13 @@ IMPORTANT SAFETY FACTS:
           ),
         ),
         actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              CycleCalculationDialog.show(context);
+            },
+            child: const Text('View Calculation Formula'),
+          ),
           ElevatedButton(
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('I Understand'),

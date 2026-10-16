@@ -11,6 +11,9 @@ class ScheduleDateModal extends StatefulWidget {
   final int periodLength;
   final int safetyBufferDays;
   final Function(DateTime scheduledAt) onSchedule;
+  final String? title;
+  final String? submitLabel;
+  final DateTime? initialDateTime;
 
   const ScheduleDateModal({
     super.key,
@@ -19,6 +22,9 @@ class ScheduleDateModal extends StatefulWidget {
     required this.periodLength,
     required this.safetyBufferDays,
     required this.onSchedule,
+    this.title,
+    this.submitLabel,
+    this.initialDateTime,
   });
 
   @override
@@ -42,9 +48,15 @@ class _ScheduleDateModalState extends State<ScheduleDateModal> {
   @override
   void initState() {
     super.initState();
-    // Default to upcoming 3 days from now at 9:00 PM
-    final now = DateTime.now();
-    _selectedDate = DateTime(now.year, now.month, now.day).add(const Duration(days: 3));
+    if (widget.initialDateTime != null) {
+      final initial = widget.initialDateTime!.toLocal();
+      _selectedDate = DateTime(initial.year, initial.month, initial.day);
+      _selectedTime = TimeOfDay(hour: initial.hour, minute: initial.minute);
+    } else {
+      // Default to upcoming 3 days from now at 9:00 PM
+      final now = DateTime.now();
+      _selectedDate = DateTime(now.year, now.month, now.day).add(const Duration(days: 3));
+    }
   }
 
   DailyFertilityInfo _getProjectedFertility(DateTime date) {
@@ -163,12 +175,12 @@ class _ScheduleDateModalState extends State<ScheduleDateModal> {
           ),
           const SizedBox(height: 18),
           Row(
-            children: const [
-              Icon(Icons.event_available, color: AppTheme.crimson),
-              SizedBox(width: 8),
+            children: [
+              const Icon(Icons.event_available, color: AppTheme.crimson),
+              const SizedBox(width: 8),
               Text(
-                'Schedule Intimacy Date',
-                style: TextStyle(
+                widget.title ?? 'Schedule Intimacy Date',
+                style: const TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
                   color: AppTheme.plum,
@@ -349,7 +361,7 @@ class _ScheduleDateModalState extends State<ScheduleDateModal> {
                       Navigator.of(context).pop();
                     },
               icon: const Icon(Icons.send_rounded, size: 18),
-              label: Text(_isPast ? 'Choose a Future Time' : 'Send Date Proposal'),
+              label: Text(_isPast ? 'Choose a Future Time' : (widget.submitLabel ?? 'Send Date Proposal')),
             ),
           ),
         ],

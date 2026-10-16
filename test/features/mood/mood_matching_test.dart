@@ -109,7 +109,7 @@ void main() {
       expect(repo.memories.first.type, 'spark_match');
       expect(repo.memories.first.title, contains('Spark Ignited'));
 
-      // Partner B celebrates & turns off spark match
+      // Partner B cancels spark match for both
       await repo.turnOffSparkMatch();
 
       // Verify spark is turned off on Partner B's device
@@ -121,10 +121,10 @@ void main() {
       expect(repo.getDailyMoodStatus().isMatch, isFalse);
       expect(repo.getDailyMoodStatus().userInTheMood, isFalse);
 
-      // Verify spark_celebrated memory is logged in inbox
+      // Verify spark_canceled memory is logged in inbox
       expect(repo.memories.length, 2);
-      expect(repo.memories.first.type, 'spark_celebrated');
-      expect(repo.memories.first.title, contains('Spark Celebrated'));
+      expect(repo.memories.first.type, 'spark_canceled');
+      expect(repo.memories.first.title, contains('Spark Canceled'));
     });
   });
 }

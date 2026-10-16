@@ -4,6 +4,7 @@ enum IntimacyStatus {
   counterOffered,
   rainchecked,
   completed,
+  canceled,
 }
 
 enum VibeCheckStatus {
@@ -40,15 +41,15 @@ class ScheduledIntimacy {
       id: json['id'] as String,
       coupleId: json['couple_id'] as String,
       proposedBy: json['proposed_by'] as String,
-      scheduledAt: DateTime.parse(json['scheduled_at'] as String),
+      scheduledAt: DateTime.parse(json['scheduled_at'] as String).toLocal(),
       status: _parseStatus(json['status'] as String?),
       counterScheduledAt: json['counter_scheduled_at'] != null
-          ? DateTime.parse(json['counter_scheduled_at'] as String)
+          ? DateTime.parse(json['counter_scheduled_at'] as String).toLocal()
           : null,
       responseNote: json['response_note'] as String?,
       vibeCheckStatus: _parseVibeStatus(json['vibe_check_status'] as String?),
       createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'] as String)
+          ? DateTime.parse(json['created_at'] as String).toLocal()
           : DateTime.now(),
     );
   }
@@ -58,12 +59,12 @@ class ScheduledIntimacy {
       'id': id,
       'couple_id': coupleId,
       'proposed_by': proposedBy,
-      'scheduled_at': scheduledAt.toIso8601String(),
+      'scheduled_at': scheduledAt.toUtc().toIso8601String(),
       'status': status.name,
-      'counter_scheduled_at': counterScheduledAt?.toIso8601String(),
+      'counter_scheduled_at': counterScheduledAt?.toUtc().toIso8601String(),
       'response_note': responseNote,
       'vibe_check_status': vibeCheckStatus.name,
-      'created_at': createdAt.toIso8601String(),
+      'created_at': createdAt.toUtc().toIso8601String(),
     };
   }
 
@@ -78,6 +79,8 @@ class ScheduledIntimacy {
         return IntimacyStatus.rainchecked;
       case 'completed':
         return IntimacyStatus.completed;
+      case 'canceled':
+        return IntimacyStatus.canceled;
       default:
         return IntimacyStatus.pending;
     }
@@ -124,15 +127,19 @@ class ScheduledIntimacy {
   }
 
   static String formatDurationUntil(DateTime target, {DateTime? from}) {
-    final now = from ?? DateTime.now();
-    final diff = target.difference(now);
+    final now = (from ?? DateTime.now()).toLocal();
+    final targetLocal = target.toLocal();
+    final diff = targetLocal.difference(now);
 
     if (diff.isNegative) {
+      final pastMinutes = (-diff.inMinutes);
       final pastHours = (-diff.inHours);
-      if (pastHours < 24) {
-        return pastHours <= 0 ? 'Passed moments ago' : 'Passed ${pastHours}h ago';
-      }
       final pastDays = (-diff.inDays);
+      if (pastMinutes < 60) {
+        return pastMinutes <= 1 ? 'Passed moments ago' : 'Passed ${pastMinutes}m ago';
+      } else if (pastHours < 24) {
+        return 'Passed ${pastHours}h ago';
+      }
       return 'Passed ${pastDays}d ago';
     }
 

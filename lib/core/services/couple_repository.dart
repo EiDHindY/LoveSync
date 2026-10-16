@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import 'package:love_app/core/config/supabase_config.dart';
 import 'package:love_app/core/services/notification_service.dart';
+import 'package:love_app/features/cycle/domain/cycle_engine.dart';
 import 'package:love_app/features/memories/domain/couple_memory.dart';
 import 'package:love_app/features/mood/domain/mood_status.dart';
 import 'package:love_app/features/scheduling/domain/scheduled_intimacy.dart';
@@ -28,6 +29,7 @@ class CoupleRepository extends ChangeNotifier {
   String _partnerId = '';
   String _partnerName = '';
   String _partnerRole = '';
+  String _partnerAvatarUrl = '';
   bool _partnerTracksCycle = false;
 
   // Couple Info
@@ -57,9 +59,34 @@ class CoupleRepository extends ChangeNotifier {
 
   String _userEmail = '';
   String _userAvatarUrl = '';
+  String _sparkSoundId = 'heartbeat_pulse';
+  String _cancelSoundId = 'sunset_marimba';
+  String _dateRequestSoundId = 'moonlight_vibe';
+  final Set<String> _firedNudgeKeys = {};
   StreamSubscription<AuthState>? _authSubscription;
 
   // Getters
+  String get sparkSoundId => _sparkSoundId;
+  String get cancelSoundId => _cancelSoundId;
+  String get dateRequestSoundId => _dateRequestSoundId;
+
+  Future<void> setSparkSound(String soundId) async {
+    _sparkSoundId = soundId;
+    await _saveToStorage();
+    notifyListeners();
+  }
+
+  Future<void> setCancelSound(String soundId) async {
+    _cancelSoundId = soundId;
+    await _saveToStorage();
+    notifyListeners();
+  }
+
+  Future<void> setDateRequestSound(String soundId) async {
+    _dateRequestSoundId = soundId;
+    await _saveToStorage();
+    notifyListeners();
+  }
   String get currentUserId => _currentUserId;
   String get currentUserName {
     if (_currentUserName.isNotEmpty) return _currentUserName;
@@ -93,6 +120,7 @@ class CoupleRepository extends ChangeNotifier {
   bool get hasPrivacyPin => _privacyPin.isNotEmpty;
   String get partnerName => _partnerName;
   String get partnerRole => _partnerRole;
+  String get partnerAvatarUrl => _partnerAvatarUrl;
   bool get partnerTracksCycle => _partnerTracksCycle;
   bool get hasCompletedOnboarding => _hasCompletedOnboarding;
   bool get isPaired => _isPaired;
@@ -112,17 +140,191 @@ class CoupleRepository extends ChangeNotifier {
     bool changed = false;
     for (int i = 0; i < _scheduledDates.length; i++) {
       final date = _scheduledDates[i];
-      if (date.status != IntimacyStatus.completed && date.scheduledAt.isBefore(now)) {
+      if (date.status != IntimacyStatus.completed && date.scheduledAt.toLocal().isBefore(now)) {
         _scheduledDates[i] = date.copyWith(status: IntimacyStatus.completed);
         changed = true;
       }
     }
+    checkDateNudges();
     if (changed) {
       _saveToStorage();
       if (notify) notifyListeners();
     }
     return changed;
   }
+
+  int _nudgeDayId(String dateId) => (dateId.hashCode.abs() % 100000) * 10 + 1;
+  int _nudgeHourId(String dateId) => (dateId.hashCode.abs() % 100000) * 10 + 2;
+
+  Future<void> _scheduleNudgesForDate(ScheduledIntimacy date) async {
+    if (date.status != IntimacyStatus.accepted) return;
+    final partnerDisplay = _partnerName.isNotEmpty ? _partnerName : 'your partner';
+    final targetTime = date.scheduledAt.toLocal();
+    final now = DateTime.now();
+
+    // 1. Day before (24 hours prior)
+    final dayBefore = targetTime.subtract(const Duration(days: 1));
+    if (dayBefore.isAfter(now)) {
+      await NotificationService().scheduleNotification(
+        id: _nudgeDayId(date.id),
+        title: 'Upcoming Date Tomorrow 💕',
+        body: 'Get ready for tomorrow\'s intimate rendezvous with $partnerDisplay!',
+        scheduledDate: dayBefore,
+        soundId: 'classic_spark',
+      );
+    }
+
+    // 2. One hour before
+    final hourBefore = targetTime.subtract(const Duration(hours: 1));
+    if (hourBefore.isAfter(now)) {
+      await NotificationService().scheduleNotification(
+        id: _nudgeHourId(date.id),
+        title: 'Date Night in 1 Hour 💕',
+        body: 'Just one hour until your intimate rendezvous with $partnerDisplay! ✨',
+        scheduledDate: hourBefore,
+        soundId: 'classic_spark',
+      );
+    }
+  }
+
+  Future<void> _cancelNudgesForDate(String dateId) async {
+    await NotificationService().cancelNotification(_nudgeDayId(dateId));
+    await NotificationService().cancelNotification(_nudgeHourId(dateId));
+    _firedNudgeKeys.remove('${dateId}_day_before');
+    _firedNudgeKeys.remove('${dateId}_one_hour');
+  }
+
+  void _rescheduleAllUpcomingNudges() {
+    final now = DateTime.now();
+    for (final date in _scheduledDates) {
+      if (date.status == IntimacyStatus.accepted && date.scheduledAt.toLocal().isAfter(now)) {
+        _scheduleNudgesForDate(date);
+      }
+    }
+  }
+
+  void checkDateNudges() {
+    final now = DateTime.now();
+    final partnerDisplay = _partnerName.isNotEmpty ? _partnerName : 'your partner';
+    bool firedAny = false;
+
+    for (final date in _scheduledDates) {
+      if (date.status != IntimacyStatus.accepted) continue;
+      final target = date.scheduledAt.toLocal();
+
+      // Day before window: between [target - 24 hours] and [target - 1 hour]
+      final dayBeforeStart = target.subtract(const Duration(days: 1));
+      final hourBeforeStart = target.subtract(const Duration(hours: 1));
+      final dayKey = '${date.id}_day_before';
+      if (now.isAfter(dayBeforeStart) && now.isBefore(hourBeforeStart)) {
+        if (!_firedNudgeKeys.contains(dayKey)) {
+          _firedNudgeKeys.add(dayKey);
+          firedAny = true;
+          NotificationService().showNotification(
+            id: _nudgeDayId(date.id),
+            title: 'Upcoming Date Tomorrow 💕',
+            body: 'Get ready for tomorrow\'s intimate rendezvous with $partnerDisplay!',
+            soundId: 'classic_spark',
+          );
+        }
+      }
+
+      // 1 hour before window: between [target - 1 hour] and [target]
+      final hourKey = '${date.id}_one_hour';
+      if (now.isAfter(hourBeforeStart) && now.isBefore(target)) {
+        if (!_firedNudgeKeys.contains(hourKey)) {
+          _firedNudgeKeys.add(hourKey);
+          firedAny = true;
+          NotificationService().showNotification(
+            id: _nudgeHourId(date.id),
+            title: 'Date Night in 1 Hour 💕',
+            body: 'Just one hour until your intimate rendezvous with $partnerDisplay! ✨',
+            soundId: 'classic_spark',
+          );
+        }
+      }
+    }
+
+    if (firedAny) {
+      _saveToStorage();
+    }
+  }
+
+  static const int kNotifCycleStartDayBeforeId = 9001;
+  static const int kNotifSafeWindowDayBeforeId = 9002;
+
+  Future<void> scheduleCycleNotifications() async {
+    if (_lastPeriodStartDate == null) {
+      await NotificationService().cancelNotification(kNotifCycleStartDayBeforeId);
+      await NotificationService().cancelNotification(kNotifSafeWindowDayBeforeId);
+      return;
+    }
+
+    final now = DateTime.now();
+    final partnerDisplay = _partnerName.isNotEmpty ? _partnerName : 'your partner';
+
+    // 1. Day before cycle begins (scheduled at 10:00 AM local time)
+    final cycleStartNotifDate = CycleEngine.getNextDayBeforeCycleStarts(
+      fromDate: now,
+      lastPeriodStartDate: _lastPeriodStartDate,
+      cycleLength: _cycleLength,
+      notificationHour: 10,
+      notificationMinute: 0,
+    );
+
+    if (cycleStartNotifDate != null && cycleStartNotifDate.isAfter(now)) {
+      final String title;
+      final String body;
+      if (_tracksCycle) {
+        title = 'Period Expected Tomorrow 🌸';
+        body = 'Your new cycle begins tomorrow. Take time to rest, hydrate, and care for yourself today.';
+      } else {
+        title = '$partnerDisplay\'s Cycle Begins Tomorrow 🌸';
+        body = 'Her new cycle starts tomorrow. Be extra gentle, supportive, and show her some extra love today. 💕';
+      }
+
+      await NotificationService().scheduleNotification(
+        id: kNotifCycleStartDayBeforeId,
+        title: title,
+        body: body,
+        scheduledDate: cycleStartNotifDate,
+        soundId: 'sunset_marimba',
+        iconName: 'notif_date_nudge',
+      );
+    }
+
+    // 2. Day before safe window begins (scheduled at 10:00 AM local time)
+    final safeWindowNotifDate = CycleEngine.getNextDayBeforeSafeWindowStarts(
+      fromDate: now,
+      lastPeriodStartDate: _lastPeriodStartDate,
+      cycleLength: _cycleLength,
+      safetyBufferDays: _safetyBufferDays,
+      notificationHour: 10,
+      notificationMinute: 0,
+    );
+
+    if (safeWindowNotifDate != null && safeWindowNotifDate.isAfter(now)) {
+      final String title;
+      final String body;
+      if (_tracksCycle) {
+        title = 'Safe Window Begins Tomorrow 🟢';
+        body = 'Post-ovulation caution ends today. Your naturally safe window begins tomorrow.';
+      } else {
+        title = 'Safe Window Begins Tomorrow 🟢';
+        body = 'Fertile caution period ends today. Safe intimacy window with $partnerDisplay begins tomorrow.';
+      }
+
+      await NotificationService().scheduleNotification(
+        id: kNotifSafeWindowDayBeforeId,
+        title: title,
+        body: body,
+        scheduledDate: safeWindowNotifDate,
+        soundId: 'classic_spark',
+        iconName: 'notif_spark_match',
+      );
+    }
+  }
+
   List<CoupleMemory> get memories => List.unmodifiable(_memories);
   int get unreadMemoriesCount => _memories.where((m) => !_readMemoryIds.contains(m.id)).length;
   bool isMemoryRead(String id) => _readMemoryIds.contains(id);
@@ -132,6 +334,44 @@ class CoupleRepository extends ChangeNotifier {
     _readMemoryIds.addAll(_memories.map((m) => m.id));
     _lastViewedMemoriesAt = DateTime.now();
     await _saveToStorage();
+    notifyListeners();
+  }
+
+  Future<void> clearAllMemories() async {
+    _memories.clear();
+    _readMemoryIds.clear();
+    _lastViewedMemoriesAt = null;
+    await _saveToStorage();
+
+    if (SupabaseConfig.isInitialized && _coupleId.isNotEmpty) {
+      try {
+        await Supabase.instance.client.rpc('clear_couple_memories', params: {
+          'p_couple_id': _coupleId,
+        });
+      } catch (e) {
+        debugPrint('Notice clearing memories via RPC: $e');
+        try {
+          await Supabase.instance.client
+              .from('couple_memories')
+              .delete()
+              .eq('couple_id', _coupleId);
+        } catch (e2) {
+          debugPrint('Notice deleting couple memories: $e2');
+        }
+      }
+    }
+
+    if (_realtimeChannel != null) {
+      try {
+        await _realtimeChannel!.sendBroadcastMessage(
+          event: 'memories_cleared',
+          payload: {'couple_id': _coupleId},
+        );
+      } catch (e) {
+        debugPrint('Broadcast memories_cleared error: $e');
+      }
+    }
+
     notifyListeners();
   }
 
@@ -153,7 +393,10 @@ class CoupleRepository extends ChangeNotifier {
   static String _extractAvatarUrl(User user) {
     final meta = user.userMetadata;
     if (meta != null) {
-      final url = meta['avatar_url'] as String? ?? meta['picture'] as String?;
+      final url = meta['avatar_url'] as String? ??
+          meta['picture'] as String? ??
+          meta['photoURL'] as String? ??
+          meta['photo_url'] as String?;
       if (url != null && url.isNotEmpty) return url;
     }
     final identities = user.identities;
@@ -161,7 +404,10 @@ class CoupleRepository extends ChangeNotifier {
       for (final identity in identities) {
         final idData = identity.identityData;
         if (idData != null) {
-          final url = idData['avatar_url'] as String? ?? idData['picture'] as String?;
+          final url = idData['avatar_url'] as String? ??
+              idData['picture'] as String? ??
+              idData['photoURL'] as String? ??
+              idData['photo_url'] as String?;
           if (url != null && url.isNotEmpty) return url;
         }
       }
@@ -275,6 +521,7 @@ class CoupleRepository extends ChangeNotifier {
               'sender_name': _currentUserName,
               'sender_role': _currentUserRole,
               'tracks_cycle': _tracksCycle,
+              'sender_avatar_url': userAvatarUrl,
             },
           );
         } catch (e) {
@@ -301,6 +548,7 @@ class CoupleRepository extends ChangeNotifier {
                 'sender_name': _currentUserName,
                 'sender_role': _currentUserRole,
                 'tracks_cycle': _tracksCycle,
+                'sender_avatar_url': userAvatarUrl,
               },
             );
           } catch (e) {
@@ -325,6 +573,7 @@ class CoupleRepository extends ChangeNotifier {
               'sender_name': _currentUserName,
               'sender_role': _currentUserRole,
               'tracks_cycle': _tracksCycle,
+              'sender_avatar_url': userAvatarUrl,
             },
           );
         } catch (e) {
@@ -347,10 +596,27 @@ class CoupleRepository extends ChangeNotifier {
             'sender_name': _currentUserName,
             'sender_role': _currentUserRole,
             'tracks_cycle': _tracksCycle,
+            'sender_avatar_url': userAvatarUrl,
           },
         );
       } catch (e) {
         debugPrint('Error sending partner_ping: $e');
+      }
+    }
+  }
+
+  void broadcastAvatarUpdate() {
+    if (_realtimeChannel != null && _inviteCode.isNotEmpty && userAvatarUrl.isNotEmpty) {
+      try {
+        _realtimeChannel!.sendBroadcastMessage(
+          event: 'partner_avatar_update',
+          payload: {
+            'sender_id': _currentUserId,
+            'sender_avatar_url': userAvatarUrl,
+          },
+        );
+      } catch (e) {
+        debugPrint('Error broadcasting avatar update: $e');
       }
     }
   }
@@ -379,12 +645,16 @@ class CoupleRepository extends ChangeNotifier {
               final senderName = payload['sender_name'] as String? ?? 'Partner';
               final senderRole = payload['sender_role'] as String? ?? 'partner';
               final senderTracksCycle = payload['tracks_cycle'] as bool? ?? false;
+              final senderAvatar = payload['sender_avatar_url'] as String? ?? '';
 
               if (senderId != null && senderId != _currentUserId) {
                 _partnerId = senderId;
                 _partnerName = senderName;
                 _partnerRole = senderRole;
                 _partnerTracksCycle = senderTracksCycle;
+                if (senderAvatar.isNotEmpty) {
+                  _partnerAvatarUrl = senderAvatar;
+                }
                 _isPaired = true;
                 _saveToStorage();
 
@@ -407,12 +677,16 @@ class CoupleRepository extends ChangeNotifier {
               final senderName = payload['sender_name'] as String? ?? 'Partner';
               final senderRole = payload['sender_role'] as String? ?? 'partner';
               final senderTracksCycle = payload['tracks_cycle'] as bool? ?? false;
+              final senderAvatar = payload['sender_avatar_url'] as String? ?? '';
 
               if (senderId != null && senderId != _currentUserId) {
                 _partnerId = senderId;
                 _partnerName = senderName;
                 _partnerRole = senderRole;
                 _partnerTracksCycle = senderTracksCycle;
+                if (senderAvatar.isNotEmpty) {
+                  _partnerAvatarUrl = senderAvatar;
+                }
                 _isPaired = true;
                 _saveToStorage();
                 notifyListeners();
@@ -426,6 +700,7 @@ class CoupleRepository extends ChangeNotifier {
               final senderName = payload['sender_name'] as String? ?? 'Partner';
               final senderRole = payload['sender_role'] as String? ?? 'partner';
               final senderTracksCycle = payload['tracks_cycle'] as bool? ?? false;
+              final senderAvatar = payload['sender_avatar_url'] as String? ?? '';
 
               if (senderId != null && senderId != _currentUserId) {
                 if (_partnerId.isEmpty || _partnerName.isEmpty) {
@@ -433,7 +708,14 @@ class CoupleRepository extends ChangeNotifier {
                   _partnerName = senderName;
                   _partnerRole = senderRole;
                   _partnerTracksCycle = senderTracksCycle;
+                  if (senderAvatar.isNotEmpty) {
+                    _partnerAvatarUrl = senderAvatar;
+                  }
                   _isPaired = true;
+                  _saveToStorage();
+                  notifyListeners();
+                } else if (senderAvatar.isNotEmpty && _partnerAvatarUrl != senderAvatar) {
+                  _partnerAvatarUrl = senderAvatar;
                   _saveToStorage();
                   notifyListeners();
                 }
@@ -449,16 +731,38 @@ class CoupleRepository extends ChangeNotifier {
                 final senderName = payload['sender_name'] as String? ?? 'Partner';
                 final senderRole = payload['sender_role'] as String? ?? 'partner';
                 final senderTracksCycle = payload['tracks_cycle'] as bool? ?? false;
+                final senderAvatar = payload['sender_avatar_url'] as String? ?? '';
                 if (_partnerId.isEmpty || _partnerName.isEmpty) {
                   _partnerId = senderId;
                   _partnerName = senderName;
                   _partnerRole = senderRole;
                   _partnerTracksCycle = senderTracksCycle;
+                  if (senderAvatar.isNotEmpty) {
+                    _partnerAvatarUrl = senderAvatar;
+                  }
                   _isPaired = true;
+                  _saveToStorage();
+                  notifyListeners();
+                } else if (senderAvatar.isNotEmpty && _partnerAvatarUrl != senderAvatar) {
+                  _partnerAvatarUrl = senderAvatar;
                   _saveToStorage();
                   notifyListeners();
                 }
                 _sendPartnerAck();
+              }
+            },
+          )
+          .onBroadcast(
+            event: 'partner_avatar_update',
+            callback: (payload) {
+              final senderId = payload['sender_id'] as String?;
+              if (senderId != null && senderId != _currentUserId) {
+                final senderAvatar = payload['sender_avatar_url'] as String? ?? '';
+                if (senderAvatar.isNotEmpty && _partnerAvatarUrl != senderAvatar) {
+                  _partnerAvatarUrl = senderAvatar;
+                  _saveToStorage();
+                  notifyListeners();
+                }
               }
             },
           )
@@ -471,6 +775,7 @@ class CoupleRepository extends ChangeNotifier {
                 _partnerId = '';
                 _partnerName = '';
                 _partnerRole = '';
+                _partnerAvatarUrl = '';
                 _partnerTracksCycle = false;
                 _saveToStorage();
                 NotificationService().showNotification(
@@ -492,8 +797,12 @@ class CoupleRepository extends ChangeNotifier {
                 }
                 _cycleLength = payload['cycle_length'] as int? ?? _cycleLength;
                 _periodLength = payload['period_length'] as int? ?? _periodLength;
-                _safetyBufferDays = payload['buffer_days'] as int? ?? _safetyBufferDays;
+                final incomingBuffer = payload['buffer_days'] as int?;
+                if (incomingBuffer != null) {
+                  _safetyBufferDays = max(2, incomingBuffer);
+                }
                 _saveToStorage();
+                scheduleCycleNotifications();
                 notifyListeners();
               }
             },
@@ -532,6 +841,7 @@ class CoupleRepository extends ChangeNotifier {
                     id: 1,
                     title: "It's a Match! 🔥",
                     body: "Both of you are in the mood tonight! The spark is ignited.",
+                    soundId: _sparkSoundId,
                   );
                 }
                 await _saveToStorage();
@@ -544,36 +854,31 @@ class CoupleRepository extends ChangeNotifier {
             callback: (payload) async {
               final senderId = payload['sender_id'] as String?;
               final dateKey = payload['date'] as String?;
-              final memoryJson = payload['memory'] as Map<String, dynamic>?;
+              final senderName = payload['sender_name'] as String? ?? 'Your partner';
 
               if (dateKey != null && senderId != null && senderId != _currentUserId) {
                 _moodSignals.putIfAbsent(dateKey, () => {});
                 _moodSignals[dateKey]![senderId] = false;
                 _moodSignals[dateKey]![_currentUserId] = false;
 
-                if (memoryJson != null) {
-                  final partnerMem = CoupleMemory.fromJson(memoryJson);
-                  _memories.removeWhere((m) => m.id == partnerMem.id || (m.windowKey == dateKey && m.type == 'spark_celebrated'));
-                  _memories.insert(0, partnerMem);
-                } else {
-                  final celMem = CoupleMemory(
-                    id: _uuid.v4(),
-                    coupleId: _coupleId,
-                    createdBy: senderId,
-                    type: 'spark_celebrated',
-                    title: 'Spark Celebrated! 🎉',
-                    description: '${payload['sender_name'] ?? 'Your partner'} celebrated the spark.',
-                    windowKey: dateKey,
-                    createdAt: DateTime.now(),
-                  );
-                  _memories.removeWhere((m) => m.windowKey == dateKey && m.type == 'spark_celebrated');
-                  _memories.insert(0, celMem);
-                }
+                final cancelMem = CoupleMemory(
+                  id: _uuid.v4(),
+                  coupleId: _coupleId,
+                  createdBy: senderId,
+                  type: 'spark_canceled',
+                  title: 'Spark Canceled',
+                  description: '$senderName canceled the spark.',
+                  windowKey: dateKey,
+                  createdAt: DateTime.now(),
+                );
+                _memories.removeWhere((m) => m.windowKey == dateKey && (m.type == 'spark_canceled' || m.type == 'spark_celebrated'));
+                _memories.insert(0, cancelMem);
 
                 NotificationService().showNotification(
                   id: 4,
-                  title: 'Spark Celebrated! 🎉',
-                  body: '${payload['sender_name'] ?? 'Your partner'} celebrated the spark and turned it off.',
+                  title: 'Spark Canceled',
+                  body: '$senderName canceled the spark.',
+                  soundId: _cancelSoundId,
                 );
                 await _saveToStorage();
                 notifyListeners();
@@ -587,6 +892,14 @@ class CoupleRepository extends ChangeNotifier {
               if (senderId != null && senderId != _currentUserId) {
                 final dateJson = payload['data'] as Map<String, dynamic>;
                 final newDate = ScheduledIntimacy.fromJson(dateJson);
+                final now = DateTime.now();
+                for (int i = 0; i < _scheduledDates.length; i++) {
+                  final d = _scheduledDates[i];
+                  if (!d.scheduledAt.toLocal().isBefore(now) &&
+                      (d.status == IntimacyStatus.accepted || d.status == IntimacyStatus.pending)) {
+                    _scheduledDates[i] = d.copyWith(status: IntimacyStatus.canceled);
+                  }
+                }
                 _scheduledDates.removeWhere((e) => e.id == newDate.id);
                 _scheduledDates.insert(0, newDate);
                 await _saveToStorage();
@@ -595,6 +908,7 @@ class CoupleRepository extends ChangeNotifier {
                   id: 2,
                   title: 'New Date Night Proposal 💕',
                   body: 'Your partner proposed an intimate rendezvous!',
+                  soundId: _dateRequestSoundId,
                 );
                 notifyListeners();
               }
@@ -627,7 +941,7 @@ class CoupleRepository extends ChangeNotifier {
                     _scheduledDates[index] = _scheduledDates[index].copyWith(
                       status: parsedStatus,
                       counterScheduledAt: payload['counter_scheduled_at'] != null
-                          ? DateTime.tryParse(payload['counter_scheduled_at'] as String)
+                          ? DateTime.tryParse(payload['counter_scheduled_at'] as String)?.toLocal()
                           : null,
                       responseNote: payload['note'] as String?,
                     );
@@ -650,10 +964,96 @@ class CoupleRepository extends ChangeNotifier {
                   body: isAccepted
                       ? '$senderName accepted your date proposal!'
                       : '$senderName responded: $statusStr',
+                  soundId: isAccepted ? 'heartbeat_pulse' : null,
                 );
+
+                if (isAccepted && dateId != null) {
+                  final targetDate = _scheduledDates.firstWhere(
+                    (e) => e.id == dateId,
+                    orElse: () => _scheduledDates.isNotEmpty
+                        ? _scheduledDates.first
+                        : ScheduledIntimacy(
+                            id: dateId,
+                            coupleId: _coupleId,
+                            proposedBy: senderId,
+                            scheduledAt: DateTime.now(),
+                            status: IntimacyStatus.accepted,
+                            createdAt: DateTime.now(),
+                          ),
+                  );
+                  _scheduleNudgesForDate(targetDate);
+                } else if (!isAccepted && dateId != null) {
+                  _cancelNudgesForDate(dateId);
+                }
 
                 notifyListeners();
               }
+            },
+          )
+          .onBroadcast(
+            event: 'date_canceled',
+            callback: (payload) async {
+              final senderId = payload['sender_id'] as String?;
+              final dateId = payload['id'] as String?;
+              final canceledIdsList = (payload['canceled_ids'] as List<dynamic>?)?.map((e) => e.toString()).toSet() ?? <String>{};
+              if (dateId != null) canceledIdsList.add(dateId);
+              final senderName = payload['sender_name'] as String? ?? 'Your partner';
+              final formattedDate = payload['formatted_date'] as String? ?? 'the upcoming date';
+
+              if (senderId != null && senderId != _currentUserId) {
+                for (final cid in canceledIdsList) {
+                  _cancelNudgesForDate(cid);
+                }
+                final now = DateTime.now();
+                String? windowKey;
+
+                for (int i = 0; i < _scheduledDates.length; i++) {
+                  final d = _scheduledDates[i];
+                  if (canceledIdsList.contains(d.id) ||
+                      (!d.scheduledAt.toLocal().isBefore(now) &&
+                          (d.status == IntimacyStatus.accepted || d.status == IntimacyStatus.pending))) {
+                    windowKey ??= DateFormat('EEE, MMM d').format(d.scheduledAt.toLocal());
+                    _scheduledDates[i] = d.copyWith(status: IntimacyStatus.canceled);
+                  }
+                }
+
+                final cancelMem = CoupleMemory(
+                  id: _uuid.v4(),
+                  coupleId: _coupleId,
+                  createdBy: senderId,
+                  type: 'date_canceled',
+                  title: 'Date Canceled',
+                  description: '$senderName canceled the date scheduled for $formattedDate.',
+                  windowKey: windowKey,
+                  createdAt: DateTime.now().toLocal(),
+                );
+
+                if (windowKey != null) {
+                  _memories.removeWhere((m) => m.type == 'date_night' && m.windowKey == windowKey);
+                  _memories.removeWhere((m) => m.type == 'date_canceled' && m.windowKey == windowKey);
+                }
+                _memories.insert(0, cancelMem);
+
+                NotificationService().showNotification(
+                  id: 21,
+                  title: 'Date Canceled',
+                  body: '$senderName canceled the date scheduled for $formattedDate.',
+                  soundId: _cancelSoundId,
+                );
+
+                await _saveToStorage();
+                notifyListeners();
+              }
+            },
+          )
+          .onBroadcast(
+            event: 'memories_cleared',
+            callback: (payload) {
+              _memories.clear();
+              _readMemoryIds.clear();
+              _lastViewedMemoriesAt = null;
+              _saveToStorage();
+              notifyListeners();
             },
           )
           .subscribe();
@@ -681,6 +1081,7 @@ class CoupleRepository extends ChangeNotifier {
         _partnerId = data['partnerId'] ?? _partnerId;
         _partnerName = data['partnerName'] ?? _partnerName;
         _partnerRole = data['partnerRole'] ?? _partnerRole;
+        _partnerAvatarUrl = data['partnerAvatarUrl'] ?? _partnerAvatarUrl;
         _partnerTracksCycle = data['partnerTracksCycle'] ?? false;
         _isPaired = data['isPaired'] ?? _isPaired;
         _inviteCode = data['inviteCode'] ?? _inviteCode;
@@ -690,7 +1091,8 @@ class CoupleRepository extends ChangeNotifier {
         }
         _cycleLength = data['cycleLength'] ?? _cycleLength;
         _periodLength = data['periodLength'] ?? _periodLength;
-        _safetyBufferDays = data['safetyBufferDays'] ?? _safetyBufferDays;
+        final storedBuffer = data['safetyBufferDays'] as int?;
+        _safetyBufferDays = storedBuffer != null ? max(2, storedBuffer) : _safetyBufferDays;
 
         if (data['moodSignals'] != null) {
           final rawMoods = data['moodSignals'] as Map<String, dynamic>;
@@ -725,34 +1127,27 @@ class CoupleRepository extends ChangeNotifier {
         if (data['lastViewedMemoriesAt'] != null) {
           _lastViewedMemoriesAt = DateTime.tryParse(data['lastViewedMemoriesAt'] as String);
         }
-        _ensureDateMemoriesExist();
+        if (data['firedNudgeKeys'] != null) {
+          final rawFired = data['firedNudgeKeys'] as List<dynamic>;
+          _firedNudgeKeys.clear();
+          for (final k in rawFired) {
+            _firedNudgeKeys.add(k.toString());
+          }
+        }
+        final loadedSound = data['sparkSoundId'] as String?;
+        if (loadedSound == null || loadedSound == 'velvet_rhodes' || loadedSound == 'romantic_harp') {
+          _sparkSoundId = 'heartbeat_pulse';
+        } else {
+          _sparkSoundId = loadedSound;
+        }
+        _cancelSoundId = data['cancelSoundId'] ?? 'sunset_marimba';
+        _dateRequestSoundId = data['dateRequestSoundId'] ?? 'moonlight_vibe';
+        _rescheduleAllUpcomingNudges();
+        scheduleCycleNotifications();
         notifyListeners();
       }
     } catch (e) {
       debugPrint('Error loading saved state: $e');
-    }
-  }
-
-  void _ensureDateMemoriesExist() {
-    for (final date in _scheduledDates) {
-      if (date.status == IntimacyStatus.accepted) {
-        final formattedDate = DateFormat('EEEE, MMM d @ h:mm a').format(date.scheduledAt);
-        final partnerDisplay = _partnerName.isNotEmpty ? _partnerName : 'Your partner';
-        final windowKey = DateFormat('EEE, MMM d').format(date.scheduledAt);
-        if (!_memories.any((m) => m.type == 'date_night' && m.windowKey == windowKey)) {
-          final mem = CoupleMemory(
-            id: _uuid.v4(),
-            coupleId: _coupleId,
-            createdBy: date.proposedBy,
-            type: 'date_night',
-            title: 'Date Night Confirmed! ✨',
-            description: 'Date scheduled with $partnerDisplay for $formattedDate.',
-            windowKey: windowKey,
-            createdAt: date.createdAt,
-          );
-          _memories.insert(0, mem);
-        }
-      }
     }
   }
 
@@ -767,6 +1162,7 @@ class CoupleRepository extends ChangeNotifier {
         'recoveryEmail': _recoveryEmail,
         'userEmail': _userEmail,
         'userAvatarUrl': _userAvatarUrl,
+        'sparkSoundId': _sparkSoundId,
         'currentUserId': _currentUserId,
         'currentUserName': _currentUserName,
         'currentUserRole': _currentUserRole,
@@ -774,6 +1170,7 @@ class CoupleRepository extends ChangeNotifier {
         'partnerId': _partnerId,
         'partnerName': _partnerName,
         'partnerRole': _partnerRole,
+        'partnerAvatarUrl': _partnerAvatarUrl,
         'partnerTracksCycle': _partnerTracksCycle,
         'isPaired': _isPaired,
         'inviteCode': _inviteCode,
@@ -787,6 +1184,9 @@ class CoupleRepository extends ChangeNotifier {
         'memories': _memories.map((e) => e.toJson()).toList(),
         'readMemoryIds': _readMemoryIds.toList(),
         'lastViewedMemoriesAt': _lastViewedMemoriesAt?.toIso8601String(),
+        'firedNudgeKeys': _firedNudgeKeys.toList(),
+        'cancelSoundId': _cancelSoundId,
+        'dateRequestSoundId': _dateRequestSoundId,
       };
       await prefs.setString(_kPrefKey, jsonEncode(data));
     } catch (e) {
@@ -875,6 +1275,7 @@ class CoupleRepository extends ChangeNotifier {
               id: 1,
               title: "It's a Match! 🔥",
               body: "Both of you are in the mood tonight! The spark is ignited.",
+              soundId: _sparkSoundId,
             );
             notifyListeners();
           }
@@ -902,6 +1303,7 @@ class CoupleRepository extends ChangeNotifier {
         id: 1,
         title: "It's a Match! 🔥",
         body: "Both of you are in the mood tonight! The spark is ignited.",
+        soundId: _sparkSoundId,
       );
     }
 
@@ -914,25 +1316,25 @@ class CoupleRepository extends ChangeNotifier {
     final key = _dateKey(targetDate);
     _moodSignals.putIfAbsent(key, () => {});
 
-    // Reset mood for both partners
+    // Reset mood for both partners (Cancel for both)
     _moodSignals[key]![_currentUserId] = false;
     if (_partnerId.isNotEmpty) {
       _moodSignals[key]![_partnerId] = false;
     }
 
     final partnerDisplay = _partnerName.isNotEmpty ? _partnerName : 'Your partner';
-    final celMem = CoupleMemory(
+    final cancelMem = CoupleMemory(
       id: _uuid.v4(),
       coupleId: _coupleId,
       createdBy: _currentUserId,
-      type: 'spark_celebrated',
-      title: 'Spark Celebrated! 🎉',
-      description: 'You and $partnerDisplay celebrated this spark!',
+      type: 'spark_canceled',
+      title: 'Spark Canceled',
+      description: 'You canceled the spark with $partnerDisplay.',
       windowKey: key,
       createdAt: DateTime.now(),
     );
-    _memories.removeWhere((m) => m.windowKey == key && m.type == 'spark_celebrated');
-    _memories.insert(0, celMem);
+    _memories.removeWhere((m) => m.windowKey == key && (m.type == 'spark_canceled' || m.type == 'spark_celebrated'));
+    _memories.insert(0, cancelMem);
 
     await _saveToStorage();
 
@@ -945,7 +1347,8 @@ class CoupleRepository extends ChangeNotifier {
             'sender_id': _currentUserId,
             'sender_name': _currentUserName,
             'date': key,
-            'memory': celMem.toJson(),
+            'memory': cancelMem.toJson(),
+            'action': 'canceled',
           },
         );
       } catch (e) {
@@ -961,7 +1364,30 @@ class CoupleRepository extends ChangeNotifier {
       } catch (e) {
         debugPrint('Persist turn off spark notice: $e');
       }
+      try {
+        if (_coupleId.isNotEmpty) {
+          await Supabase.instance.client.from('couple_memories').upsert({
+            'id': cancelMem.id,
+            'couple_id': _coupleId,
+            'created_by': _currentUserId,
+            'type': cancelMem.type,
+            'title': cancelMem.title,
+            'description': cancelMem.description,
+            'window_key': cancelMem.windowKey,
+            'created_at': cancelMem.createdAt.toUtc().toIso8601String(),
+          });
+        }
+      } catch (e) {
+        debugPrint('Persist cancel memory error: $e');
+      }
     }
+
+    NotificationService().showNotification(
+      id: 4,
+      title: 'Spark Canceled',
+      body: 'You canceled the spark with $partnerDisplay.',
+      soundId: _cancelSoundId,
+    );
 
     notifyListeners();
     return getDailyMoodStatus(targetDate);
@@ -988,6 +1414,7 @@ class CoupleRepository extends ChangeNotifier {
     _partnerRole = tempRole;
 
     _saveToStorage();
+    scheduleCycleNotifications();
     notifyListeners();
   }
 
@@ -1001,8 +1428,9 @@ class CoupleRepository extends ChangeNotifier {
     _lastPeriodStartDate = startDate;
     if (cycleLength != null) _cycleLength = cycleLength;
     if (periodLength != null) _periodLength = periodLength;
-    if (bufferDays != null) _safetyBufferDays = bufferDays;
+    if (bufferDays != null) _safetyBufferDays = max(2, bufferDays);
     await _saveToStorage();
+    await scheduleCycleNotifications();
 
     // Broadcast cycle update to partner's phone in real time
     if (_realtimeChannel != null) {
@@ -1050,6 +1478,7 @@ class CoupleRepository extends ChangeNotifier {
           if (pProfile != null) {
             _partnerName = pProfile['display_name'] ?? _partnerName;
             _partnerRole = pProfile['role'] ?? _partnerRole;
+            _partnerAvatarUrl = pProfile['avatar_url'] as String? ?? _partnerAvatarUrl;
           }
         }
       } catch (e) {
@@ -1082,6 +1511,7 @@ class CoupleRepository extends ChangeNotifier {
     _partnerId = '';
     _partnerName = '';
     _partnerRole = '';
+    _partnerAvatarUrl = '';
     _partnerTracksCycle = false;
     await _saveToStorage();
     notifyListeners();
@@ -1097,6 +1527,25 @@ class CoupleRepository extends ChangeNotifier {
 
   // Scheduling Methods
   Future<void> proposeDate(DateTime dateTime) async {
+    final now = DateTime.now();
+    for (int i = 0; i < _scheduledDates.length; i++) {
+      final d = _scheduledDates[i];
+      if (!d.scheduledAt.toLocal().isBefore(now) &&
+          (d.status == IntimacyStatus.accepted || d.status == IntimacyStatus.pending)) {
+        _scheduledDates[i] = d.copyWith(status: IntimacyStatus.canceled);
+        if (SupabaseConfig.isInitialized && Supabase.instance.client.auth.currentUser != null) {
+          try {
+            await Supabase.instance.client.from('scheduled_intimacy').update({
+              'status': IntimacyStatus.canceled.name,
+              'updated_at': DateTime.now().toUtc().toIso8601String(),
+            }).eq('id', d.id);
+          } catch (e) {
+            debugPrint('Notice canceling previous date: $e');
+          }
+        }
+      }
+    }
+
     final item = ScheduledIntimacy(
       id: _uuid.v4(),
       coupleId: _coupleId,
@@ -1114,10 +1563,10 @@ class CoupleRepository extends ChangeNotifier {
           'id': item.id,
           'couple_id': _coupleId,
           'proposed_by': _currentUserId,
-          'scheduled_at': item.scheduledAt.toIso8601String(),
+          'scheduled_at': item.scheduledAt.toUtc().toIso8601String(),
           'status': item.status.name,
-          'created_at': item.createdAt.toIso8601String(),
-          'updated_at': DateTime.now().toIso8601String(),
+          'created_at': item.createdAt.toUtc().toIso8601String(),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
         });
       } catch (e) {
         debugPrint('Persist scheduled date notice: $e');
@@ -1143,6 +1592,179 @@ class CoupleRepository extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> proposeReschedule(String id, DateTime newDateTime) async {
+    final index = _scheduledDates.indexWhere((e) => e.id == id);
+    if (index != -1) {
+      final existing = _scheduledDates[index];
+      final updated = existing.copyWith(
+        scheduledAt: newDateTime,
+        proposedBy: _currentUserId,
+        status: IntimacyStatus.pending,
+        vibeCheckStatus: VibeCheckStatus.pending,
+      );
+      _scheduledDates[index] = updated;
+      await _saveToStorage();
+
+      if (SupabaseConfig.isInitialized && Supabase.instance.client.auth.currentUser != null) {
+        try {
+          await Supabase.instance.client.from('scheduled_intimacy').upsert({
+            'id': updated.id,
+            'couple_id': updated.coupleId.isNotEmpty ? updated.coupleId : _coupleId,
+            'proposed_by': _currentUserId,
+            'scheduled_at': updated.scheduledAt.toUtc().toIso8601String(),
+            'status': IntimacyStatus.pending.name,
+            'vibe_check_status': VibeCheckStatus.pending.name,
+            'created_at': updated.createdAt.toUtc().toIso8601String(),
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          });
+        } catch (e) {
+          debugPrint('Persist reschedule notice: $e');
+        }
+      }
+
+      if (_realtimeChannel != null) {
+        try {
+          await _realtimeChannel!.sendBroadcastMessage(
+            event: 'date_proposed',
+            payload: {
+              'sender_id': _currentUserId,
+              'sender_name': _currentUserName,
+              'data': updated.toJson(),
+              'is_reschedule': true,
+            },
+          );
+        } catch (e) {
+          debugPrint('Broadcast reschedule error: $e');
+        }
+      }
+
+      notifyListeners();
+    }
+  }
+
+  Future<void> cancelScheduledDate(String id) async {
+    final now = DateTime.now();
+    final targetIndex = _scheduledDates.indexWhere((e) => e.id == id);
+    final targetDate = targetIndex != -1 ? _scheduledDates[targetIndex] : null;
+
+    final canceledIds = <String>{};
+    if (id.isNotEmpty) {
+      canceledIds.add(id);
+    }
+
+    // Cancel the specified date and all active upcoming dates (accepted or pending)
+    for (int i = 0; i < _scheduledDates.length; i++) {
+      final d = _scheduledDates[i];
+      if (d.id == id ||
+          (!d.scheduledAt.toLocal().isBefore(now) &&
+              (d.status == IntimacyStatus.accepted || d.status == IntimacyStatus.pending))) {
+        _scheduledDates[i] = d.copyWith(status: IntimacyStatus.canceled);
+        canceledIds.add(d.id);
+      }
+    }
+
+    for (final cid in canceledIds) {
+      _cancelNudgesForDate(cid);
+    }
+
+    final localScheduled = (targetDate ??
+            _scheduledDates.firstWhere(
+              (e) => canceledIds.contains(e.id),
+              orElse: () => ScheduledIntimacy(
+                id: id,
+                coupleId: _coupleId,
+                proposedBy: _currentUserId,
+                scheduledAt: DateTime.now(),
+                status: IntimacyStatus.canceled,
+                createdAt: DateTime.now(),
+              ),
+            ))
+        .scheduledAt
+        .toLocal();
+
+    final formattedDate = DateFormat('EEEE, MMM d @ h:mm a').format(localScheduled);
+    final windowKey = DateFormat('EEE, MMM d').format(localScheduled);
+    final partnerDisplay = _partnerName.isNotEmpty ? _partnerName : 'your partner';
+
+    final cancelMem = CoupleMemory(
+      id: _uuid.v4(),
+      coupleId: _coupleId,
+      createdBy: _currentUserId,
+      type: 'date_canceled',
+      title: 'Date Canceled',
+      description: 'You canceled the date with $partnerDisplay scheduled for $formattedDate.',
+      windowKey: windowKey,
+      createdAt: DateTime.now().toLocal(),
+    );
+
+    _memories.removeWhere((m) => m.type == 'date_night' && m.windowKey == windowKey);
+    _memories.removeWhere((m) => m.type == 'date_canceled' && m.windowKey == windowKey);
+    _memories.insert(0, cancelMem);
+
+    await _saveToStorage();
+
+    if (SupabaseConfig.isInitialized && Supabase.instance.client.auth.currentUser != null) {
+      for (final cid in canceledIds) {
+        try {
+          await Supabase.instance.client.from('scheduled_intimacy').update({
+            'status': IntimacyStatus.canceled.name,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          }).eq('id', cid);
+        } catch (e) {
+          debugPrint('Cancel date Supabase notice: $e');
+        }
+      }
+
+      try {
+        if (_coupleId.isNotEmpty) {
+          await Supabase.instance.client.from('couple_memories').upsert({
+            'id': cancelMem.id,
+            'couple_id': _coupleId,
+            'created_by': _currentUserId,
+            'type': cancelMem.type,
+            'title': cancelMem.title,
+            'description': cancelMem.description,
+            'window_key': cancelMem.windowKey,
+            'created_at': cancelMem.createdAt.toUtc().toIso8601String(),
+          });
+        }
+      } catch (e) {
+        debugPrint('Persist cancel date memory notice: $e');
+      }
+    }
+
+    if (_realtimeChannel != null) {
+      try {
+        await _realtimeChannel!.sendBroadcastMessage(
+          event: 'date_canceled',
+          payload: {
+            'sender_id': _currentUserId,
+            'sender_name': _currentUserName,
+            'id': id,
+            'canceled_ids': canceledIds.toList(),
+            'memory': cancelMem.toJson(),
+            'formatted_date': formattedDate,
+          },
+        );
+      } catch (e) {
+        debugPrint('Broadcast cancel date error: $e');
+      }
+    }
+
+    NotificationService().showNotification(
+      id: 21,
+      title: 'Date Canceled',
+      body: 'You canceled the date with $partnerDisplay scheduled for $formattedDate.',
+      soundId: _cancelSoundId,
+    );
+
+    notifyListeners();
+  }
+
+  Future<void> cancelPendingProposal(String id) async {
+    await cancelScheduledDate(id);
+  }
+
   Future<void> respondToDate(String id, IntimacyStatus newStatus, {DateTime? counterTime, String? note}) async {
     final index = _scheduledDates.indexWhere((e) => e.id == id);
     if (index != -1) {
@@ -1156,9 +1778,10 @@ class CoupleRepository extends ChangeNotifier {
 
       CoupleMemory? dateMem;
       if (newStatus == IntimacyStatus.accepted) {
-        final formattedDate = DateFormat('EEEE, MMM d @ h:mm a').format(updated.scheduledAt);
+        final localScheduled = updated.scheduledAt.toLocal();
+        final formattedDate = DateFormat('EEEE, MMM d @ h:mm a').format(localScheduled);
         final partnerDisplay = _partnerName.isNotEmpty ? _partnerName : 'Your partner';
-        final windowKey = DateFormat('EEE, MMM d').format(updated.scheduledAt);
+        final windowKey = DateFormat('EEE, MMM d').format(localScheduled);
         dateMem = CoupleMemory(
           id: _uuid.v4(),
           coupleId: _coupleId,
@@ -1167,10 +1790,13 @@ class CoupleRepository extends ChangeNotifier {
           title: 'Date Night Confirmed! ✨',
           description: 'Date scheduled with $partnerDisplay for $formattedDate.',
           windowKey: windowKey,
-          createdAt: DateTime.now(),
+          createdAt: DateTime.now().toLocal(),
         );
         _memories.removeWhere((m) => m.type == 'date_night' && m.windowKey == windowKey);
         _memories.insert(0, dateMem);
+        _scheduleNudgesForDate(updated);
+      } else {
+        _cancelNudgesForDate(updated.id);
       }
 
       await _saveToStorage();
@@ -1182,13 +1808,13 @@ class CoupleRepository extends ChangeNotifier {
             'id': updated.id,
             'couple_id': updated.coupleId.isNotEmpty ? updated.coupleId : _coupleId,
             'proposed_by': updated.proposedBy.isNotEmpty ? updated.proposedBy : _currentUserId,
-            'scheduled_at': updated.scheduledAt.toIso8601String(),
+            'scheduled_at': updated.scheduledAt.toUtc().toIso8601String(),
             'status': updated.status.name,
-            'counter_scheduled_at': updated.counterScheduledAt?.toIso8601String(),
+            'counter_scheduled_at': updated.counterScheduledAt?.toUtc().toIso8601String(),
             'response_note': updated.responseNote,
             'vibe_check_status': updated.vibeCheckStatus.name,
-            'created_at': updated.createdAt.toIso8601String(),
-            'updated_at': DateTime.now().toIso8601String(),
+            'created_at': updated.createdAt.toUtc().toIso8601String(),
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
           });
 
           if (dateMem != null && _coupleId.isNotEmpty) {
@@ -1200,7 +1826,7 @@ class CoupleRepository extends ChangeNotifier {
               'title': dateMem.title,
               'description': dateMem.description,
               'window_key': dateMem.windowKey,
-              'created_at': dateMem.createdAt.toIso8601String(),
+              'created_at': dateMem.createdAt.toUtc().toIso8601String(),
             });
           }
         } catch (e) {
@@ -1217,7 +1843,7 @@ class CoupleRepository extends ChangeNotifier {
               'sender_name': _currentUserName,
               'id': id,
               'status': newStatus.name,
-              'counter_scheduled_at': counterTime?.toIso8601String(),
+              'counter_scheduled_at': counterTime?.toUtc().toIso8601String(),
               'note': note,
               'data': updated.toJson(),
               if (dateMem != null) 'memory': dateMem.toJson(),
@@ -1294,6 +1920,7 @@ class CoupleRepository extends ChangeNotifier {
             'id': authUser.id,
             'display_name': _currentUserName,
             'role': _currentUserRole,
+            if (userAvatarUrl.isNotEmpty) 'avatar_url': userAvatarUrl,
             if (_coupleId.isNotEmpty) 'couple_id': _coupleId,
           });
           if (_coupleId.isEmpty && _inviteCode.isNotEmpty) {
@@ -1332,6 +1959,7 @@ class CoupleRepository extends ChangeNotifier {
     _hasCreatedProfile = true;
     _hasCompletedOnboarding = true;
     await _saveToStorage();
+    scheduleCycleNotifications();
     _subscribeToChannel();
     notifyListeners();
   }
@@ -1416,6 +2044,7 @@ class CoupleRepository extends ChangeNotifier {
     _partnerId = '';
     _partnerName = '';
     _partnerRole = '';
+    _partnerAvatarUrl = '';
     _inviteCode = '';
     _moodSignals.clear();
     _scheduledDates.clear();
@@ -1434,7 +2063,8 @@ class CoupleRepository extends ChangeNotifier {
       final uid = user.id;
       _currentUserId = uid;
       _userEmail = user.email ?? '';
-      _userAvatarUrl = _extractAvatarUrl(user);
+      final av = _extractAvatarUrl(user);
+      if (av.isNotEmpty) _userAvatarUrl = av;
       if (_currentUserName.isEmpty) {
         _currentUserName = _extractDisplayName(user);
       }
@@ -1442,6 +2072,16 @@ class CoupleRepository extends ChangeNotifier {
 
       // 1. Fetch user's profile from Supabase
       final profileRes = await client.from('profiles').select().eq('id', uid).maybeSingle();
+
+      if (profileRes != null) {
+        if (_userAvatarUrl.isEmpty && profileRes['avatar_url'] != null) {
+          _userAvatarUrl = profileRes['avatar_url'] as String;
+        } else if (_userAvatarUrl.isNotEmpty && profileRes['avatar_url'] != _userAvatarUrl) {
+          try {
+            await client.from('profiles').update({'avatar_url': _userAvatarUrl}).eq('id', uid);
+          } catch (_) {}
+        }
+      }
 
       if (profileRes != null && profileRes['couple_id'] != null) {
         _currentUserName = profileRes['display_name'] ?? _currentUserName;
@@ -1458,7 +2098,10 @@ class CoupleRepository extends ChangeNotifier {
           _inviteCode = coupleRes['invite_code'] ?? _inviteCode;
           _cycleLength = coupleRes['default_cycle_length'] ?? _cycleLength;
           _periodLength = coupleRes['default_period_length'] ?? _periodLength;
-          _safetyBufferDays = coupleRes['safety_buffer_days'] ?? _safetyBufferDays;
+          final dbBuffer = coupleRes['safety_buffer_days'] as int?;
+          if (dbBuffer != null) {
+            _safetyBufferDays = max(2, dbBuffer);
+          }
 
           final createdBy = coupleRes['created_by'] as String?;
           final partnerId = coupleRes['partner_id'] as String?;
@@ -1474,6 +2117,7 @@ class CoupleRepository extends ChangeNotifier {
               _partnerName = partnerProfile['display_name'] ?? 'Partner';
               _partnerRole = partnerProfile['role'] ?? 'partner';
               _partnerTracksCycle = _partnerRole == 'Cycle Tracker';
+              _partnerAvatarUrl = partnerProfile['avatar_url'] as String? ?? _partnerAvatarUrl;
             }
           }
         }
@@ -1504,24 +2148,9 @@ class CoupleRepository extends ChangeNotifier {
               .order('scheduled_at', ascending: false);
           if (datesRes.isNotEmpty) {
             final serverDates = datesRes.map((d) => ScheduledIntimacy.fromJson(d)).toList();
-            for (final local in _scheduledDates) {
-              if (local.status == IntimacyStatus.accepted) {
-                final sIndex = serverDates.indexWhere((s) => s.id == local.id);
-                if (sIndex != -1 && serverDates[sIndex].status != IntimacyStatus.accepted) {
-                  try {
-                    await client.from('scheduled_intimacy').update({
-                      'status': 'accepted',
-                      'updated_at': DateTime.now().toIso8601String(),
-                    }).eq('id', local.id);
-                    serverDates[sIndex] = serverDates[sIndex].copyWith(status: IntimacyStatus.accepted);
-                  } catch (e) {
-                    debugPrint('Notice updating server date to accepted: $e');
-                  }
-                }
-              }
-            }
             _scheduledDates.clear();
             _scheduledDates.addAll(serverDates);
+            _rescheduleAllUpcomingNudges();
           } else if (_scheduledDates.isNotEmpty) {
             for (final d in _scheduledDates) {
               try {
@@ -1529,13 +2158,13 @@ class CoupleRepository extends ChangeNotifier {
                   'id': d.id,
                   'couple_id': _coupleId,
                   'proposed_by': d.proposedBy.isNotEmpty ? d.proposedBy : uid,
-                  'scheduled_at': d.scheduledAt.toIso8601String(),
+                  'scheduled_at': d.scheduledAt.toUtc().toIso8601String(),
                   'status': d.status.name,
-                  'counter_scheduled_at': d.counterScheduledAt?.toIso8601String(),
+                  'counter_scheduled_at': d.counterScheduledAt?.toUtc().toIso8601String(),
                   'response_note': d.responseNote,
                   'vibe_check_status': d.vibeCheckStatus.name,
-                  'created_at': d.createdAt.toIso8601String(),
-                  'updated_at': DateTime.now().toIso8601String(),
+                  'created_at': d.createdAt.toUtc().toIso8601String(),
+                  'updated_at': DateTime.now().toUtc().toIso8601String(),
                 });
               } catch (e) {
                 debugPrint('Notice upserting local date: $e');
@@ -1572,31 +2201,11 @@ class CoupleRepository extends ChangeNotifier {
               .select()
               .eq('couple_id', _coupleId)
               .order('created_at', ascending: false);
-          if (memoriesRes.isNotEmpty) {
-            _memories.clear();
-            for (final m in memoriesRes) {
-              _memories.add(CoupleMemory.fromJson(m));
-            }
+          _memories.clear();
+          for (final m in memoriesRes) {
+            _memories.add(CoupleMemory.fromJson(m));
           }
-          _ensureDateMemoriesExist();
-          for (final m in _memories) {
-            if (!memoriesRes.any((row) => row['id'] == m.id)) {
-              try {
-                await client.from('couple_memories').upsert({
-                  'id': m.id,
-                  'couple_id': _coupleId,
-                  'created_by': m.createdBy ?? uid,
-                  'type': m.type,
-                  'title': m.title,
-                  'description': m.description,
-                  'window_key': m.windowKey,
-                  'created_at': m.createdAt.toIso8601String(),
-                });
-              } catch (e) {
-                debugPrint('Notice upserting memory to Supabase: $e');
-              }
-            }
-          }
+          await _saveToStorage();
         } catch (e) {
           debugPrint('Notice fetching couple memories: $e');
         }
@@ -1606,6 +2215,7 @@ class CoupleRepository extends ChangeNotifier {
           _hasCompletedOnboarding = true;
         }
         await _saveToStorage();
+        scheduleCycleNotifications();
         if (_inviteCode.isNotEmpty) {
           _subscribeToChannel();
         }
@@ -1655,6 +2265,7 @@ class CoupleRepository extends ChangeNotifier {
     _partnerId = '';
     _partnerName = '';
     _partnerRole = '';
+    _partnerAvatarUrl = '';
     _inviteCode = '';
     _moodSignals.clear();
     _scheduledDates.clear();
@@ -1673,11 +2284,13 @@ class CoupleRepository extends ChangeNotifier {
     String partnerRole = 'Partner',
     bool partnerTracksCycle = true,
     String? inviteCode,
+    String partnerAvatarUrl = '',
   }) {
     _isPaired = isPaired;
     _partnerName = partnerName;
     _partnerRole = partnerRole;
     _partnerTracksCycle = partnerTracksCycle;
+    _partnerAvatarUrl = partnerAvatarUrl;
     if (inviteCode != null) _inviteCode = inviteCode;
     notifyListeners();
   }

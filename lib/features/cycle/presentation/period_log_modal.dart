@@ -34,7 +34,7 @@ class _PeriodLogModalState extends State<PeriodLogModal> {
     _selectedDate = widget.initialStartDate ?? DateTime.now().subtract(const Duration(days: 7));
     _cycleLength = widget.initialCycleLength;
     _periodLength = widget.initialPeriodLength;
-    _bufferDays = widget.initialBufferDays;
+    _bufferDays = widget.initialBufferDays < 2 ? 2 : widget.initialBufferDays;
   }
 
   Future<void> _pickDate() async {
@@ -197,9 +197,9 @@ class _PeriodLogModalState extends State<PeriodLogModal> {
             ),
             Slider(
               value: _bufferDays.toDouble(),
-              min: 1,
+              min: 2,
               max: 4,
-              divisions: 3,
+              divisions: 2,
               activeColor: AppTheme.crimson,
               onChanged: (val) => setState(() => _bufferDays = val.toInt()),
             ),
@@ -280,10 +280,8 @@ class _PeriodLogModalState extends State<PeriodLogModal> {
 
   String _getBufferTitle(int buffer) {
     switch (buffer) {
-      case 1:
-        return 'Tight Cushion (±1 Day)';
       case 2:
-        return 'Standard Cushion (±2 Days) • Recommended';
+        return 'Standard Cushion (±2 Days) • Minimum & Recommended';
       case 3:
         return 'Extended Cushion (±3 Days)';
       case 4:
@@ -295,16 +293,14 @@ class _PeriodLogModalState extends State<PeriodLogModal> {
 
   String _getBufferDescription(int buffer) {
     switch (buffer) {
-      case 1:
-        return 'Adds 1 caution day before & after ovulation. Best if your cycles are strictly regular like clockwork.';
       case 2:
-        return 'Adds 2 caution days before & 1 day after ovulation. Shields against typical shifts caused by stress, travel, or fatigue.';
+        return 'Adds 2 caution days before & 2 days after ovulation (+ 24h egg viability). Minimum safe standard against shifts from stress, travel, or fatigue.';
       case 3:
-        return 'Adds 3 caution days before & 1 day after ovulation. Recommended if your cycle length varies by a couple of days.';
+        return 'Adds 3 caution days before & 3 days after ovulation (+ 24h egg viability). Recommended if your cycle length varies by a couple of days.';
       case 4:
-        return 'Adds 4 caution days before & 1 day after ovulation. Widest caution cushion for irregular cycles or zero pregnancy risk tolerance.';
+        return 'Adds 4 caution days before & 4 days after ovulation (+ 24h egg viability). Widest caution cushion for irregular cycles or zero pregnancy risk tolerance.';
       default:
-        return 'Adds extra caution days around the fertile window.';
+        return 'Adds ±$buffer caution days around ovulation (+ 24h egg viability).';
     }
   }
 
@@ -420,8 +416,7 @@ class _PeriodLogModalState extends State<PeriodLogModal> {
               ),
               const SizedBox(height: 6),
               const Text(
-                '• ±1 Day: If your cycle is strictly predictable like clockwork.\n'
-                '• ±2 Days: Recommended standard setting for most couples.\n'
+                '• ±2 Days: Recommended standard minimum setting for safe cycle tracking.\n'
                 '• ±3 or ±4 Days: If cycles fluctuate by a few days, or for zero pregnancy risk tolerance.',
                 style: TextStyle(fontSize: 12, height: 1.4, color: Color(0xFF444444)),
               ),

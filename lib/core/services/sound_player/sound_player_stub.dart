@@ -1,3 +1,3 @@
-void playSparkSound() {
-  // On mobile (Android/iOS), sound is played natively by notification channel.
-}
+void playSparkSound() {}
+
+void playNamedSound(String soundName) {}

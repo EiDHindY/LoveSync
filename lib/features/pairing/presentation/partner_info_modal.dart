@@ -7,6 +7,7 @@ class PartnerInfoModal extends StatelessWidget {
   final String partnerRole;
   final bool partnerTracksCycle;
   final String inviteCode;
+  final String partnerAvatarUrl;
   final VoidCallback onDisconnectPartner;
 
   const PartnerInfoModal({
@@ -15,6 +16,7 @@ class PartnerInfoModal extends StatelessWidget {
     required this.partnerRole,
     required this.partnerTracksCycle,
     required this.inviteCode,
+    this.partnerAvatarUrl = '',
     required this.onDisconnectPartner,
   });
 
@@ -58,6 +60,31 @@ class PartnerInfoModal extends StatelessWidget {
     }
   }
 
+  Widget _buildFallbackAvatar(String initial) {
+    return Container(
+      width: 80,
+      height: 80,
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          colors: [AppTheme.crimson, AppTheme.plum],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Center(
+        child: Text(
+          initial,
+          style: const TextStyle(
+            fontSize: 34,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final initial = partnerName.isNotEmpty ? partnerName[0].toUpperCase() : 'P';
@@ -95,11 +122,7 @@ class PartnerInfoModal extends StatelessWidget {
             height: 80,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              gradient: LinearGradient(
-                colors: [AppTheme.crimson, AppTheme.plum],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+              color: AppTheme.blush,
               boxShadow: [
                 BoxShadow(
                   color: AppTheme.crimson.withValues(alpha: 0.25),
@@ -108,15 +131,17 @@ class PartnerInfoModal extends StatelessWidget {
                 ),
               ],
             ),
-            child: Center(
-              child: Text(
-                initial,
-                style: const TextStyle(
-                  fontSize: 34,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
+            child: ClipOval(
+              child: partnerAvatarUrl.isNotEmpty
+                  ? Image.network(
+                      partnerAvatarUrl,
+                      width: 80,
+                      height: 80,
+                      fit: BoxFit.cover,
+                      webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
+                      errorBuilder: (_, _, _) => _buildFallbackAvatar(initial),
+                    )
+                  : _buildFallbackAvatar(initial),
             ),
           ),
           const SizedBox(height: 12),

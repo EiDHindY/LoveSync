@@ -29,7 +29,7 @@ class CoupleMemory {
       description: json['description'] as String? ?? '',
       windowKey: json['window_key'] as String?,
       createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'] as String)
+          ? DateTime.parse(json['created_at'] as String).toLocal()
           : DateTime.now(),
     );
   }
@@ -43,7 +43,7 @@ class CoupleMemory {
       'title': title,
       'description': description,
       'window_key': windowKey,
-      'created_at': createdAt.toIso8601String(),
+      'created_at': createdAt.toUtc().toIso8601String(),
     };
   }
 }

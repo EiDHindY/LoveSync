@@ -130,7 +130,51 @@ void main() {
     await tester.pumpAndSettle();
 
     // Verify Tab 2 (Cycle & Period) content is visible
-    expect(find.text('CYCLE & SAFETY TRACKER'), findsOneWidget);
-    expect(find.text('Log Period / Adjust Cycle'), findsOneWidget);
+    expect(find.text('NATURAL RHYTHM'), findsOneWidget);
+    expect(find.text('Log Period / Adjust Parameters'), findsOneWidget);
+  });
+
+  testWidgets('Tonight Alignment is removed and user Google avatar is displayed next to My Partner', (tester) async {
+    final repo = CoupleRepository();
+    repo.setUserEmailForTesting('alex@gmail.com');
+    repo.setPartnerForTesting(
+      isPaired: true,
+      partnerName: 'Lola',
+      partnerRole: 'Wife',
+      partnerTracksCycle: true,
+      inviteCode: 'LOVE-5839',
+      partnerAvatarUrl: 'https://example.com/lola.jpg',
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          coupleRepositoryProvider.overrideWith((ref) => repo),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.lightTheme,
+          home: const DashboardScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Verify Tonight's Alignment text is absent
+    expect(find.text("TONIGHT'S ALIGNMENT"), findsNothing);
+
+    // Verify My Partner pill is shown
+    expect(find.text('My Partner'), findsOneWidget);
+
+    // Verify User Account avatar initial is present next to My Partner
+    expect(find.text('U'), findsOneWidget);
+
+    // Tap on the user avatar to open user profile modal
+    await tester.tap(find.text('U'));
+    await tester.pumpAndSettle();
+
+    // Verify user profile modal opens with email and status
+    expect(find.text('alex@gmail.com'), findsOneWidget);
+    expect(find.text('Your Role'), findsOneWidget);
+    expect(find.text('Connection Status'), findsOneWidget);
   });
 }

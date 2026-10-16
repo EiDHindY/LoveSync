@@ -2,14 +2,28 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:love_app/core/theme/app_theme.dart';
 import 'package:love_app/features/memories/domain/couple_memory.dart';
+import 'package:love_app/features/scheduling/domain/scheduled_intimacy.dart';
 
-class MemoriesInboxModal extends StatelessWidget {
+enum MemoryFilter { all, sparks, dates }
+
+class MemoriesInboxModal extends StatefulWidget {
   final List<CoupleMemory> memories;
+  final List<ScheduledIntimacy>? scheduledDates;
+  final Future<void> Function()? onClearAll;
 
   const MemoriesInboxModal({
     super.key,
     required this.memories,
+    this.scheduledDates,
+    this.onClearAll,
   });
+
+  @override
+  State<MemoriesInboxModal> createState() => _MemoriesInboxModalState();
+}
+
+class _MemoriesInboxModalState extends State<MemoriesInboxModal> {
+  MemoryFilter _selectedFilter = MemoryFilter.all;
 
   String _formatTime(DateTime dt) {
     final now = DateTime.now();
@@ -22,10 +36,44 @@ class MemoriesInboxModal extends StatelessWidget {
     return DateFormat('MMM d, y • h:mm a').format(dt);
   }
 
+  String _formatScheduledTime(DateTime dt) {
+    return DateFormat('EEEE, MMM d · h:mm a').format(dt);
+  }
+
+  String _formatCountdown(DateTime target) {
+    final now = DateTime.now();
+    final diff = target.difference(now);
+    if (diff.isNegative) return 'Completed';
+    final hours = diff.inHours;
+    final mins = diff.inMinutes % 60;
+    if (hours > 0) return '${hours}h, ${mins}m left';
+    return '${mins}m left';
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Separate into two distinct sections: Mutual Sparks & Scheduled Dates
+    final sparkMemories = widget.memories.where((m) => m.type.startsWith('spark')).toList();
+    final dateMemories = widget.memories.where((m) => !m.type.startsWith('spark')).toList();
+
+    // Deduplicate scheduled dates so dates already represented as dateMemories aren't doubled
+    final List<ScheduledIntimacy> nonDuplicateScheduled = [];
+    if (widget.scheduledDates != null) {
+      for (final date in widget.scheduledDates!) {
+        final dateDayStr = DateFormat('EEE, MMM d').format(date.scheduledAt);
+        final alreadyLogged = dateMemories.any((m) => m.windowKey == dateDayStr);
+        if (!alreadyLogged) {
+          nonDuplicateScheduled.add(date);
+        }
+      }
+    }
+
+    final totalDateItems = dateMemories.length + nonDuplicateScheduled.length;
+    final totalMoments = widget.memories.length + nonDuplicateScheduled.length;
+    final isEmpty = totalMoments == 0;
+
     return Container(
-      height: MediaQuery.of(context).size.height * 0.75,
+      height: MediaQuery.of(context).size.height * 0.80,
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
@@ -82,9 +130,9 @@ class MemoriesInboxModal extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        memories.isEmpty
+                        isEmpty
                             ? 'Your shared intimacy timeline'
-                            : '${memories.length} documented moment${memories.length == 1 ? '' : 's'}',
+                            : '$totalMoments documented moment${totalMoments == 1 ? '' : 's'}',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey.shade600,
@@ -93,6 +141,43 @@ class MemoriesInboxModal extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (!isEmpty && widget.onClearAll != null)
+                  IconButton(
+                    tooltip: 'Clear memories',
+                    icon: const Icon(Icons.delete_outline_rounded, color: Colors.grey, size: 20),
+                    onPressed: () async {
+                      final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                          title: const Text('Clear All Memories?'),
+                          content: const Text(
+                            'This will remove all documented moments so you can retest memories from scratch.',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.of(ctx).pop(false),
+                              child: const Text('Cancel'),
+                            ),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppTheme.crimson,
+                                foregroundColor: Colors.white,
+                              ),
+                              onPressed: () => Navigator.of(ctx).pop(true),
+                              child: const Text('Clear All'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirmed == true) {
+                        await widget.onClearAll!();
+                        if (context.mounted) {
+                          Navigator.of(context).pop();
+                        }
+                      }
+                    },
+                  ),
                 IconButton(
                   onPressed: () => Navigator.of(context).pop(),
                   icon: const Icon(Icons.close_rounded, color: Colors.grey),
@@ -100,11 +185,44 @@ class MemoriesInboxModal extends StatelessWidget {
               ],
             ),
           ),
-          const Divider(height: 24),
+
+          if (!isEmpty) ...[
+            const SizedBox(height: 12),
+            // Filter Segment Pills
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _buildFilterPill(
+                      label: 'All ($totalMoments)',
+                      filter: MemoryFilter.all,
+                      icon: Icons.auto_awesome_rounded,
+                    ),
+                    const SizedBox(width: 8),
+                    _buildFilterPill(
+                      label: 'Mutual Sparks (${sparkMemories.length})',
+                      filter: MemoryFilter.sparks,
+                      icon: Icons.local_fire_department_rounded,
+                    ),
+                    const SizedBox(width: 8),
+                    _buildFilterPill(
+                      label: 'Scheduled Dates ($totalDateItems)',
+                      filter: MemoryFilter.dates,
+                      icon: Icons.event_available_rounded,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+
+          const Divider(height: 20),
 
           // Content List
           Expanded(
-            child: memories.isEmpty
+            child: isEmpty
                 ? Center(
                     child: Padding(
                       padding: const EdgeInsets.all(32),
@@ -142,134 +260,547 @@ class MemoriesInboxModal extends StatelessWidget {
                       ),
                     ),
                   )
-                : ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-                    itemCount: memories.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 12),
-                    itemBuilder: (context, index) {
-                      final item = memories[index];
-                      final isCelebrated = item.type == 'spark_celebrated';
-                      final isMatch = item.type == 'spark_match';
-                      final isDate = item.type == 'date_night' || item.type == 'date_accepted';
+                : ListView(
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                    children: [
+                      // ══════════════════════════════════════════════
+                      // SECTION 1: MUTUAL SPARKS
+                      // ══════════════════════════════════════════════
+                      if (_selectedFilter == MemoryFilter.all || _selectedFilter == MemoryFilter.sparks) ...[
+                        _buildSectionHeader(
+                          title: 'MUTUAL SPARKS',
+                          count: sparkMemories.length,
+                          icon: Icons.local_fire_department_rounded,
+                          iconColor: const Color(0xFFFF1E56),
+                          bgColor: const Color(0xFFFFECEF),
+                        ),
+                        const SizedBox(height: 8),
+                        if (sparkMemories.isEmpty)
+                          _buildEmptySectionCard(
+                            message: 'No mutual sparks documented yet.\nLight your spark and match to ignite your first memory.',
+                            icon: Icons.local_fire_department_outlined,
+                          )
+                        else
+                          ...sparkMemories.map((m) => Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: _buildSparkMemoryCard(m),
+                              )),
+                        const SizedBox(height: 16),
+                      ],
 
-                      return Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: isCelebrated
-                              ? const Color(0xFFFFF9F9)
-                              : isMatch
-                                  ? const Color(0xFFFFF0F3)
-                                  : isDate
-                                      ? const Color(0xFFFBF6FF)
-                                      : Colors.white,
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(
-                            color: isCelebrated
-                                ? AppTheme.roseGold.withValues(alpha: 0.5)
-                                : isMatch
-                                    ? const Color(0xFFFFB3C1)
-                                    : isDate
-                                        ? const Color(0xFFD4B0E5)
-                                        : Colors.grey.shade200,
-                            width: 1.5,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.02),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
+                      // ══════════════════════════════════════════════
+                      // SECTION 2: SCHEDULED DATES
+                      // ══════════════════════════════════════════════
+                      if (_selectedFilter == MemoryFilter.all || _selectedFilter == MemoryFilter.dates) ...[
+                        _buildSectionHeader(
+                          title: 'SCHEDULED DATES',
+                          count: totalDateItems,
+                          icon: Icons.event_available_rounded,
+                          iconColor: const Color(0xFF8B1E78),
+                          bgColor: const Color(0xFFF9E8F5),
                         ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: isCelebrated
-                                    ? const Color(0xFFFFDF7D).withValues(alpha: 0.25)
-                                    : isMatch
-                                        ? const Color(0xFFFF1E56).withValues(alpha: 0.12)
-                                        : isDate
-                                            ? const Color(0xFF9C27B0).withValues(alpha: 0.12)
-                                            : AppTheme.blush,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Text(
-                                isCelebrated
-                                    ? '🎉'
-                                    : isMatch
-                                        ? '🔥'
-                                        : isDate
-                                            ? '📅'
-                                            : '💕',
-                                style: const TextStyle(fontSize: 20),
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          item.title,
-                                          style: const TextStyle(
-                                            fontSize: 15,
-                                            fontWeight: FontWeight.bold,
-                                            color: AppTheme.plum,
-                                          ),
-                                        ),
-                                      ),
-                                      Text(
-                                        _formatTime(item.createdAt),
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: Colors.grey.shade500,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    item.description,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      height: 1.3,
-                                      color: Colors.grey.shade700,
-                                    ),
-                                  ),
-                                  if (item.windowKey != null) ...[
-                                    const SizedBox(height: 8),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        borderRadius: BorderRadius.circular(10),
-                                        border: Border.all(color: Colors.grey.shade300),
-                                      ),
-                                      child: Text(
-                                        item.windowKey!,
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.grey.shade600,
-                                          letterSpacing: 0.5,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
+                        const SizedBox(height: 8),
+                        if (totalDateItems == 0)
+                          _buildEmptySectionCard(
+                            message: 'No scheduled dates yet.\nPlan a rendezvous in Date Night to log a date milestone.',
+                            icon: Icons.event_outlined,
+                          )
+                        else ...[
+                          ...dateMemories.map((m) => Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: _buildDateMemoryCard(m),
+                              )),
+                          ...nonDuplicateScheduled.map((date) => Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: _buildScheduledIntimacyCard(date),
+                              )),
+                        ],
+                        const SizedBox(height: 16),
+                      ],
+                    ],
                   ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterPill({
+    required String label,
+    required MemoryFilter filter,
+    required IconData icon,
+  }) {
+    final isSelected = _selectedFilter == filter;
+    return InkWell(
+      onTap: () => setState(() => _selectedFilter = filter),
+      borderRadius: BorderRadius.circular(20),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.plum : AppTheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? AppTheme.plum : AppTheme.blush,
+            width: 1.2,
+          ),
+          boxShadow: [
+            if (isSelected)
+              BoxShadow(
+                color: AppTheme.plum.withValues(alpha: 0.2),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 14,
+              color: isSelected ? Colors.white : AppTheme.plum,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                color: isSelected ? Colors.white : AppTheme.plum,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader({
+    required String title,
+    required int count,
+    required IconData icon,
+    required Color iconColor,
+    required Color bgColor,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, size: 15, color: iconColor),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: AppTheme.plum,
+              letterSpacing: 0.8,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              '$count',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: iconColor,
+              ),
+            ),
+          ),
+          const Spacer(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptySectionCard({required String message, required IconData icon}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceContainerLow.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: Colors.grey.shade400),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                fontSize: 11.5,
+                color: Colors.grey.shade600,
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSparkMemoryCard(CoupleMemory item) {
+    final isCelebrated = item.type == 'spark_celebrated';
+    final isCanceled = item.type == 'spark_canceled';
+
+    Color cardBg;
+    Color borderColor;
+    Color iconBg;
+    Widget iconWidget;
+
+    if (isCanceled) {
+      cardBg = const Color(0xFFFAF9F9);
+      borderColor = Colors.grey.shade300;
+      iconBg = Colors.grey.shade200;
+      iconWidget = const Icon(Icons.close_rounded, size: 18, color: Colors.grey);
+    } else if (isCelebrated) {
+      cardBg = const Color(0xFFFFF9F9);
+      borderColor = AppTheme.roseGold.withValues(alpha: 0.6);
+      iconBg = const Color(0xFFFFDF7D).withValues(alpha: 0.3);
+      iconWidget = const Text('🎉', style: TextStyle(fontSize: 19));
+    } else {
+      cardBg = const Color(0xFFFFF0F3);
+      borderColor = const Color(0xFFFFB3C1);
+      iconBg = const Color(0xFFFF1E56).withValues(alpha: 0.12);
+      iconWidget = const Text('🔥', style: TextStyle(fontSize: 19));
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: borderColor,
+          width: 1.4,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(9),
+            decoration: BoxDecoration(
+              color: iconBg,
+              shape: BoxShape.circle,
+            ),
+            child: iconWidget,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        item.title,
+                        style: TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.bold,
+                          color: isCanceled ? Colors.grey.shade800 : AppTheme.plum,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      _formatTime(item.createdAt),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade500,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  item.description,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    height: 1.3,
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+                if (item.windowKey != null) ...[
+                  const SizedBox(height: 7),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: Text(
+                      item.windowKey!,
+                      style: TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade600,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDateMemoryCard(CoupleMemory item) {
+    final isCanceled = item.type == 'date_canceled';
+    return Container(
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: isCanceled ? const Color(0xFFFFF9FA) : const Color(0xFFFBF6FF),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isCanceled ? const Color(0xFFF0CCD7) : const Color(0xFFD4B0E5),
+          width: 1.4,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: (isCanceled ? const Color(0xFFC70039) : const Color(0xFF9C27B0)).withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(9),
+            decoration: BoxDecoration(
+              color: isCanceled
+                  ? const Color(0xFFC70039).withValues(alpha: 0.12)
+                  : const Color(0xFF9C27B0).withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              isCanceled ? Icons.event_busy_rounded : Icons.event_available_rounded,
+              size: 20,
+              color: isCanceled ? const Color(0xFFC70039) : const Color(0xFF8B1E78),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        item.title,
+                        style: TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.bold,
+                          color: isCanceled ? AppTheme.crimson : AppTheme.plum,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      _formatTime(item.createdAt),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade500,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  item.description,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    height: 1.3,
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+                if (item.windowKey != null) ...[
+                  const SizedBox(height: 7),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: Text(
+                      item.windowKey!,
+                      style: TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade600,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScheduledIntimacyCard(ScheduledIntimacy date) {
+    final isAccepted = date.status == IntimacyStatus.accepted;
+    final isCompleted = date.status == IntimacyStatus.completed;
+    final isPending = date.status == IntimacyStatus.pending;
+
+    Color badgeBg;
+    Color badgeText;
+    String badgeLabel;
+
+    if (isCompleted) {
+      badgeBg = Colors.grey.shade200;
+      badgeText = Colors.grey.shade700;
+      badgeLabel = 'COMPLETED';
+    } else if (isAccepted) {
+      badgeBg = const Color(0xFFE8F5E9);
+      badgeText = const Color(0xFF2E7D32);
+      badgeLabel = 'ACCEPTED';
+    } else if (isPending) {
+      badgeBg = const Color(0xFFFFF3E0);
+      badgeText = const Color(0xFFE65100);
+      badgeLabel = 'PENDING';
+    } else {
+      badgeBg = AppTheme.blush;
+      badgeText = AppTheme.crimson;
+      badgeLabel = date.status.name.toUpperCase();
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFBF6FF),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: const Color(0xFFD4B0E5),
+          width: 1.4,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF9C27B0).withValues(alpha: 0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(9),
+            decoration: BoxDecoration(
+              color: const Color(0xFF9C27B0).withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.event_available_rounded, size: 20, color: Color(0xFF8B1E78)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _formatScheduledTime(date.scheduledAt),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.plum,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: badgeBg,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        badgeLabel,
+                        style: TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.bold,
+                          color: badgeText,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  date.responseNote?.isNotEmpty == true
+                      ? 'Note: ${date.responseNote}'
+                      : 'Romantic rendezvous aligned with cycle bio-rhythm.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+                const SizedBox(height: 7),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.schedule_rounded, size: 11, color: Colors.grey.shade600),
+                          const SizedBox(width: 4),
+                          Text(
+                            _formatCountdown(date.scheduledAt),
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ],
       ),

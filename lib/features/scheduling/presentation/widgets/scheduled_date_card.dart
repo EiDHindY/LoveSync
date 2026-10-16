@@ -8,6 +8,10 @@ import 'package:love_app/features/scheduling/domain/scheduled_intimacy.dart';
 class ScheduledDateCard extends StatelessWidget {
   final ScheduledIntimacy? dateItem;
   final String currentUserId;
+  final String? userAvatarUrl;
+  final String? partnerAvatarUrl;
+  final String? userName;
+  final String? partnerName;
   final DateTime? lastPeriodStartDate;
   final int cycleLength;
   final int periodLength;
@@ -15,11 +19,18 @@ class ScheduledDateCard extends StatelessWidget {
   final VoidCallback onOpenScheduleModal;
   final Function(String id, IntimacyStatus status) onRespond;
   final Function(String id, VibeCheckStatus status) onRespondVibeCheck;
+  final VoidCallback? onReschedule;
+  final VoidCallback? onCancelProposal;
+  final VoidCallback? onCancelDate;
 
   const ScheduledDateCard({
     super.key,
     required this.dateItem,
     required this.currentUserId,
+    this.userAvatarUrl,
+    this.partnerAvatarUrl,
+    this.userName,
+    this.partnerName,
     required this.lastPeriodStartDate,
     required this.cycleLength,
     required this.periodLength,
@@ -27,11 +38,15 @@ class ScheduledDateCard extends StatelessWidget {
     required this.onOpenScheduleModal,
     required this.onRespond,
     required this.onRespondVibeCheck,
+    this.onReschedule,
+    this.onCancelProposal,
+    this.onCancelDate,
   });
 
   bool _isToday(DateTime dt) {
+    final local = dt.toLocal();
     final now = DateTime.now();
-    return dt.year == now.year && dt.month == now.month && dt.day == now.day;
+    return local.year == now.year && local.month == now.month && local.day == now.day;
   }
 
   String _getBioRhythmInsight(DailyFertilityInfo fertility) {
@@ -121,14 +136,15 @@ class ScheduledDateCard extends StatelessWidget {
     }
 
     final date = dateItem!;
-    final dateFormatted = DateFormat('EEEE, MMM d · h:mm a').format(date.scheduledAt);
+    final localScheduledAt = date.scheduledAt.toLocal();
+    final dateFormatted = DateFormat('EEEE, MMM d · h:mm a').format(localScheduledAt);
     final isOwner = date.proposedBy == currentUserId;
-    final isDateToday = _isToday(date.scheduledAt);
-    final isDatePast = date.scheduledAt.isBefore(DateTime.now());
+    final isDateToday = _isToday(localScheduledAt);
+    final isDatePast = localScheduledAt.isBefore(DateTime.now());
     final isAccepted = date.status == IntimacyStatus.accepted;
 
     final fertility = CycleEngine.calculateFertility(
-      targetDate: date.scheduledAt,
+      targetDate: localScheduledAt,
       lastPeriodStartDate: lastPeriodStartDate,
       cycleLength: cycleLength,
       periodLength: periodLength,
@@ -196,7 +212,24 @@ class ScheduledDateCard extends StatelessWidget {
               _buildStatusPill(date.status, isAccepted: isAccepted),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
+
+          // Visual Status & Avatars Banner
+          if (isAccepted)
+            _buildAcceptedAvatarBanner(
+              userName: userName ?? 'You',
+              partnerName: partnerName ?? 'Partner',
+              userAvatarUrl: userAvatarUrl,
+              partnerAvatarUrl: partnerAvatarUrl,
+            )
+          else if (date.status == IntimacyStatus.pending)
+            _buildPendingAvatarBanner(
+              isOwner: isOwner,
+              userName: userName ?? 'You',
+              partnerName: partnerName ?? 'Partner',
+              userAvatarUrl: userAvatarUrl,
+              partnerAvatarUrl: partnerAvatarUrl,
+            ),
 
           // Date and Time
           Text(
@@ -410,9 +443,9 @@ class ScheduledDateCard extends StatelessWidget {
             ),
           ] else if (date.status == IntimacyStatus.pending && !isOwner) ...[
             // Guilt-Free Response Actions
-            const Text(
-              'Your partner proposed this date. How are you feeling?',
-              style: TextStyle(fontSize: 12.5, color: Color(0xFF555555)),
+            Text(
+              '${partnerName?.isNotEmpty == true ? partnerName! : "Your partner"} proposed this date. How are you feeling?',
+              style: const TextStyle(fontSize: 12.5, color: Color(0xFF555555)),
             ),
             const SizedBox(height: 10),
             Row(
@@ -427,13 +460,13 @@ class ScheduledDateCard extends StatelessWidget {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                     ),
                     onPressed: () => onRespond(date.id, IntimacyStatus.accepted),
-                    icon: const Icon(Icons.celebration_rounded, size: 16),
+                    icon: const Icon(Icons.favorite_rounded, size: 16),
                     label: const Text('Accept Date', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold)),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: OutlinedButton(
+                  child: OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppTheme.plum,
                       side: const BorderSide(color: AppTheme.roseGold),
@@ -441,15 +474,43 @@ class ScheduledDateCard extends StatelessWidget {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                     ),
                     onPressed: () => onRespond(date.id, IntimacyStatus.rainchecked),
-                    child: const Text('Raincheck 🍿', style: TextStyle(fontSize: 12.5)),
+                    icon: const Icon(Icons.event_repeat_rounded, size: 16, color: AppTheme.plum),
+                    label: const Text('Raincheck', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
                   ),
                 ),
               ],
             ),
           ] else if (date.status == IntimacyStatus.pending && isOwner) ...[
-            const Text(
-              'Invitation sent to your partner. Awaiting their response...',
-              style: TextStyle(fontSize: 12.5, fontStyle: FontStyle.italic, color: Colors.grey),
+            Text(
+              'Invitation sent to ${partnerName?.isNotEmpty == true ? partnerName! : "your partner"}. Awaiting their response...',
+              style: const TextStyle(fontSize: 12.5, fontStyle: FontStyle.italic, color: Colors.grey),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                if (onCancelDate != null || onCancelProposal != null)
+                  OutlinedButton.icon(
+                    onPressed: onCancelDate ?? onCancelProposal,
+                    icon: const Icon(Icons.close_rounded, size: 14),
+                    label: const Text('Cancel Invitation', style: TextStyle(fontSize: 11.5)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.grey.shade700,
+                      side: BorderSide(color: Colors.grey.shade300),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                  ),
+                if ((onCancelDate != null || onCancelProposal != null) && onReschedule != null) const SizedBox(width: 8),
+                if (onReschedule != null)
+                  TextButton.icon(
+                    onPressed: onReschedule,
+                    icon: const Icon(Icons.edit_calendar_rounded, size: 14, color: AppTheme.crimson),
+                    label: const Text(
+                      'Change Time',
+                      style: TextStyle(fontSize: 11.5, color: AppTheme.crimson, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+              ],
             ),
           ] else if (date.status == IntimacyStatus.rainchecked) ...[
             const Text(
@@ -457,26 +518,72 @@ class ScheduledDateCard extends StatelessWidget {
               style: TextStyle(fontSize: 12.5, color: AppTheme.deepBerry, fontWeight: FontWeight.w600),
             ),
           ],
-          const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              onPressed: onOpenScheduleModal,
-              icon: Icon(
-                Icons.edit_calendar_rounded,
-                size: 15,
-                color: isAccepted ? Colors.white.withValues(alpha: 0.9) : AppTheme.deepBerry,
-              ),
-              label: Text(
-                'Plan Another Date',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: isAccepted ? Colors.white.withValues(alpha: 0.9) : AppTheme.deepBerry,
+          if (isAccepted) ...[
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                if (onCancelDate != null || onCancelProposal != null)
+                  OutlinedButton.icon(
+                    onPressed: onCancelDate ?? onCancelProposal,
+                    icon: const Icon(Icons.close_rounded, size: 14, color: Colors.white),
+                    label: const Text(
+                      'Cancel Date',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: Colors.white.withValues(alpha: 0.6)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    ),
+                  ),
+                if ((onCancelDate != null || onCancelProposal != null) && onReschedule != null)
+                  const SizedBox(width: 8),
+                if (onReschedule != null)
+                  TextButton.icon(
+                    onPressed: onReschedule,
+                    icon: Icon(
+                      Icons.edit_calendar_rounded,
+                      size: 15,
+                      color: Colors.white.withValues(alpha: 0.9),
+                    ),
+                    label: Text(
+                      'Reschedule Date',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white.withValues(alpha: 0.9),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ] else if (date.status == IntimacyStatus.rainchecked || date.status == IntimacyStatus.completed) ...[
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: onOpenScheduleModal,
+                icon: const Icon(
+                  Icons.edit_calendar_rounded,
+                  size: 15,
+                  color: AppTheme.deepBerry,
+                ),
+                label: const Text(
+                  'Plan Another Date',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.deepBerry,
+                  ),
                 ),
               ),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -522,6 +629,11 @@ class ScheduledDateCard extends StatelessWidget {
         text = AppTheme.periodPurple;
         label = 'COUNTER-OFFER';
         break;
+      case IntimacyStatus.canceled:
+        bg = AppTheme.blush;
+        text = AppTheme.crimson;
+        label = 'CANCELED';
+        break;
       case IntimacyStatus.completed:
         bg = Colors.grey.shade200;
         text = Colors.grey.shade700;
@@ -539,6 +651,251 @@ class ScheduledDateCard extends StatelessWidget {
         label,
         style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: text),
       ),
+    );
+  }
+
+  Widget _buildAcceptedAvatarBanner({
+    required String userName,
+    required String partnerName,
+    required String? userAvatarUrl,
+    required String? partnerAvatarUrl,
+  }) {
+    final partnerDisplay = partnerName.isNotEmpty ? partnerName : 'Partner';
+    return Container(
+      margin: const EdgeInsets.only(top: 4, bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.28)),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 72,
+            height: 38,
+            child: Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.centerLeft,
+              children: [
+                Positioned(
+                  left: 0,
+                  child: _buildAvatarCircle(
+                    imageUrl: userAvatarUrl,
+                    name: userName,
+                    fallbackBg: AppTheme.deepBerry,
+                    fallbackTextColor: Colors.white,
+                    size: 36,
+                  ),
+                ),
+                Positioned(
+                  left: 26,
+                  child: _buildAvatarCircle(
+                    imageUrl: partnerAvatarUrl,
+                    name: partnerDisplay,
+                    fallbackBg: const Color(0xFFFFB3BA),
+                    fallbackTextColor: AppTheme.plum,
+                    size: 36,
+                  ),
+                ),
+                Positioned(
+                  left: 21,
+                  top: 20,
+                  child: Container(
+                    padding: const EdgeInsets.all(2.5),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.favorite_rounded, size: 10, color: Color(0xFFFF1E56)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Date Confirmed! ✨',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'You & $partnerDisplay are synced for romance!',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.9),
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPendingAvatarBanner({
+    required bool isOwner,
+    required String userName,
+    required String partnerName,
+    required String? userAvatarUrl,
+    required String? partnerAvatarUrl,
+  }) {
+    final partnerDisplay = partnerName.isNotEmpty ? partnerName : 'Partner';
+    final userDisplay = userName.isNotEmpty ? userName : 'You';
+    return Container(
+      margin: const EdgeInsets.only(top: 4, bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7F8),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.blush, width: 1.2),
+      ),
+      child: Row(
+        children: [
+          // Proposer
+          _buildAvatarCircle(
+            imageUrl: isOwner ? userAvatarUrl : partnerAvatarUrl,
+            name: isOwner ? userDisplay : partnerDisplay,
+            fallbackBg: AppTheme.deepBerry,
+            fallbackTextColor: Colors.white,
+            size: 34,
+            statusBadge: Container(
+              padding: const EdgeInsets.all(2),
+              decoration: const BoxDecoration(color: Color(0xFF2E7D32), shape: BoxShape.circle),
+              child: const Icon(Icons.check, size: 9, color: Colors.white),
+            ),
+          ),
+          const SizedBox(width: 6),
+          // Arrow connector
+          Expanded(
+            child: Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    height: 1.5,
+                    color: AppTheme.crimson.withValues(alpha: 0.3),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Icon(Icons.arrow_forward_rounded, size: 13, color: AppTheme.crimson.withValues(alpha: 0.6)),
+                ),
+                Expanded(
+                  child: Container(
+                    height: 1.5,
+                    color: AppTheme.crimson.withValues(alpha: 0.3),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 6),
+          // Recipient
+          _buildAvatarCircle(
+            imageUrl: isOwner ? partnerAvatarUrl : userAvatarUrl,
+            name: isOwner ? partnerDisplay : userDisplay,
+            fallbackBg: const Color(0xFFFFB3BA),
+            fallbackTextColor: AppTheme.plum,
+            size: 34,
+            statusBadge: Container(
+              padding: const EdgeInsets.all(2),
+              decoration: const BoxDecoration(color: Color(0xFFE65100), shape: BoxShape.circle),
+              child: const Icon(Icons.hourglass_top_rounded, size: 9, color: Colors.white),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            flex: 2,
+            child: Text(
+              isOwner
+                  ? 'Awaiting $partnerDisplay\'s response'
+                  : '$partnerDisplay invited you!',
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.plum,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAvatarCircle({
+    required String? imageUrl,
+    required String name,
+    required Color fallbackBg,
+    required Color fallbackTextColor,
+    double size = 38,
+    Widget? statusBadge,
+  }) {
+    final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: fallbackBg,
+            border: Border.all(color: Colors.white, width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.15),
+                blurRadius: 5,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: ClipOval(
+            child: (imageUrl != null && imageUrl.isNotEmpty)
+                ? Image.network(
+                    imageUrl,
+                    width: size,
+                    height: size,
+                    fit: BoxFit.cover,
+                    webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
+                    errorBuilder: (_, _, _) => Center(
+                      child: Text(
+                        initial,
+                        style: TextStyle(
+                          fontSize: size * 0.42,
+                          fontWeight: FontWeight.bold,
+                          color: fallbackTextColor,
+                        ),
+                      ),
+                    ),
+                  )
+                : Center(
+                    child: Text(
+                      initial,
+                      style: TextStyle(
+                        fontSize: size * 0.42,
+                        fontWeight: FontWeight.bold,
+                        color: fallbackTextColor,
+                      ),
+                    ),
+                  ),
+          ),
+        ),
+        if (statusBadge != null)
+          Positioned(
+            right: -2,
+            bottom: -2,
+            child: statusBadge,
+          ),
+      ],
     );
   }
 }
