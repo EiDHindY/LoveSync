@@ -29,14 +29,6 @@ class _DmChatViewState extends ConsumerState<DmChatView> {
   final ImagePicker _picker = ImagePicker();
   bool _isSending = false;
 
-  final List<String> _quickWhispers = [
-    'Thinking of you ✨',
-    'Can\'t wait for tonight 💕',
-    'Sending you a kiss 💋',
-    'Mood signal is lit 🔥',
-    'Miss you so much! 🥰',
-    'You look stunning today 🌹',
-  ];
 
   final List<String> _reactionEmojis = ['❤️', '🔥', '💋', '🥂', '🥰', '🥺'];
 
@@ -333,9 +325,6 @@ class _DmChatViewState extends ConsumerState<DmChatView> {
                   },
                 ),
         ),
-
-        // Quick Romantic Whispers
-        _buildWhisperBar(),
 
         // Input Field
         _buildInputBar(context, repo),
@@ -735,28 +724,7 @@ class _DmChatViewState extends ConsumerState<DmChatView> {
     );
   }
 
-  Widget _buildWhisperBar() {
-    return Container(
-      height: 38,
-      margin: const EdgeInsets.only(bottom: 6),
-      child: ListView.separated(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        scrollDirection: Axis.horizontal,
-        itemCount: _quickWhispers.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (context, idx) {
-          final whisper = _quickWhispers[idx];
-          return ActionChip(
-            label: Text(whisper, style: const TextStyle(fontSize: 11.5, color: AppTheme.plum, fontWeight: FontWeight.w600)),
-            backgroundColor: AppTheme.blush.withValues(alpha: 0.5),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-            onPressed: () => _sendMessage(whisper),
-          );
-        },
-      ),
-    );
-  }
+
 
   Widget _buildInputBar(BuildContext context, CoupleRepository repo) {
     return Container(

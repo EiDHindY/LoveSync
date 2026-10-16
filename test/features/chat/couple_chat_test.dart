@@ -269,15 +269,11 @@ void main() {
       expect(find.text('Hello sweetheart!'), findsOneWidget);
       expect(find.text('Hey Lola! Thinking of you'), findsOneWidget);
 
-      // Verify quick romantic whisper chips
-      expect(find.text('Thinking of you ✨'), findsOneWidget);
-      expect(find.text('Can\'t wait for tonight 💕'), findsOneWidget);
-
       // Verify input bar
       expect(find.byType(TextField), findsOneWidget);
     });
 
-    testWidgets('Tapping whisper chip sends quick message', (tester) async {
+    testWidgets('Entering text and tapping send button sends message', (tester) async {
       final repo = CoupleRepository();
       repo.setCurrentUserIdForTesting('user-me');
       repo.setPartnerForTesting(
@@ -300,12 +296,15 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Tap on first whisper chip
-      await tester.tap(find.text('Thinking of you ✨'));
+      // Enter text and tap send
+      await tester.enterText(find.byType(TextField), 'I miss you!');
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.send_rounded));
       await tester.pumpAndSettle();
 
       // Message should now be added to repository
-      expect(repo.chatMessages.any((m) => m.text == 'Thinking of you ✨'), isTrue);
+      expect(repo.chatMessages.any((m) => m.text == 'I miss you!'), isTrue);
     });
 
     testWidgets('Displays view-once photo card with burn status', (tester) async {

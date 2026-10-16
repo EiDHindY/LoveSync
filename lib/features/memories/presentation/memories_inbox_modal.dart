@@ -212,9 +212,10 @@ class _MemoriesInboxModalState extends ConsumerState<MemoriesInboxModal> {
               child: Row(
                 children: [
                   _buildFilterPill(
-                    label: 'All ($totalMoments)',
-                    filter: MemoryFilter.all,
-                    icon: Icons.auto_awesome_rounded,
+                    label: 'Direct Chat',
+                    filter: MemoryFilter.chat,
+                    icon: Icons.chat_bubble_rounded,
+                    badgeCount: unreadChatCount,
                   ),
                   const SizedBox(width: 8),
                   _buildFilterPill(
@@ -230,10 +231,9 @@ class _MemoriesInboxModalState extends ConsumerState<MemoriesInboxModal> {
                   ),
                   const SizedBox(width: 8),
                   _buildFilterPill(
-                    label: 'Direct Chat',
-                    filter: MemoryFilter.chat,
-                    icon: Icons.chat_bubble_rounded,
-                    badgeCount: unreadChatCount,
+                    label: 'All ($totalMoments)',
+                    filter: MemoryFilter.all,
+                    icon: Icons.auto_awesome_rounded,
                   ),
                 ],
               ),

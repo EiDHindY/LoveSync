@@ -438,8 +438,9 @@ class CoupleRepository extends ChangeNotifier {
     final storagePath = '$_coupleId/$fileName';
 
     if (SupabaseConfig.isInitialized && _coupleId.isNotEmpty) {
+      final client = Supabase.instance.client;
+      publicUrl = client.storage.from('chat_images').getPublicUrl(storagePath);
       try {
-        final client = Supabase.instance.client;
         await client.storage.from('chat_images').uploadBinary(
           storagePath,
           bytes,
@@ -448,7 +449,6 @@ class CoupleRepository extends ChangeNotifier {
             upsert: true,
           ),
         );
-        publicUrl = client.storage.from('chat_images').getPublicUrl(storagePath);
       } catch (e) {
         debugPrint('Notice uploading photo to storage: $e');
       }
@@ -459,7 +459,7 @@ class CoupleRepository extends ChangeNotifier {
       coupleId: _coupleId,
       senderId: _currentUserId,
       text: 'View-Once Photo',
-      imageUrl: publicUrl ?? storagePath,
+      imageUrl: publicUrl ?? (SupabaseConfig.isInitialized ? Supabase.instance.client.storage.from('chat_images').getPublicUrl(storagePath) : storagePath),
       isViewOnce: true,
       isViewed: false,
       createdAt: DateTime.now().toUtc(),
@@ -597,7 +597,7 @@ class CoupleRepository extends ChangeNotifier {
         final client = Supabase.instance.client;
         String path = rawUrl;
         if (rawUrl.contains('/chat_images/')) {
-          path = rawUrl.split('/chat_images/').last;
+          path = rawUrl.split('/chat_images/').last.split('?').first;
         }
         await client.storage.from('chat_images').remove([path]);
       } catch (e) {

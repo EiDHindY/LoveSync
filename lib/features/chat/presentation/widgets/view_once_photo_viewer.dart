@@ -2,8 +2,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:gal/gal.dart';
 import 'package:http/http.dart' as http;
+import 'package:love_app/core/config/supabase_config.dart';
 import 'package:love_app/core/theme/app_theme.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ViewOncePhotoViewer extends StatefulWidget {
   final String imageUrl;
@@ -45,6 +47,16 @@ class _ViewOncePhotoViewerState extends State<ViewOncePhotoViewer> {
   bool _isSaving = false;
   bool _savedToGallery = false;
 
+  String get _effectiveUrl {
+    if (widget.imageUrl.startsWith('http://') || widget.imageUrl.startsWith('https://')) {
+      return widget.imageUrl;
+    }
+    if (SupabaseConfig.isInitialized) {
+      return Supabase.instance.client.storage.from('chat_images').getPublicUrl(widget.imageUrl);
+    }
+    return widget.imageUrl;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -56,10 +68,36 @@ class _ViewOncePhotoViewerState extends State<ViewOncePhotoViewer> {
     if (widget.imageUrl.isEmpty) return;
     setState(() => _isSaving = true);
     try {
-      final response = await http.get(Uri.parse(widget.imageUrl));
-      if (response.statusCode == 200) {
+      Uint8List? imageBytes;
+
+      // 1. Try downloading via Supabase storage client if available
+      if (SupabaseConfig.isInitialized) {
+        try {
+          final client = Supabase.instance.client;
+          String path = widget.imageUrl;
+          if (path.contains('/chat_images/')) {
+            path = path.split('/chat_images/').last.split('?').first;
+          }
+          imageBytes = await client.storage.from('chat_images').download(path);
+        } catch (e) {
+          debugPrint('Notice downloading from Supabase storage: $e');
+        }
+      }
+
+      // 2. Fallback to HTTP GET using resolved URL
+      if (imageBytes == null || imageBytes.isEmpty) {
+        final url = _effectiveUrl;
+        if (url.startsWith('http')) {
+          final response = await http.get(Uri.parse(url));
+          if (response.statusCode == 200) {
+            imageBytes = response.bodyBytes;
+          }
+        }
+      }
+
+      if (imageBytes != null && imageBytes.isNotEmpty) {
         await Gal.putImageBytes(
-          response.bodyBytes,
+          imageBytes,
           album: 'LoveSync',
           name: 'LoveSync_${DateTime.now().millisecondsSinceEpoch}',
         );
@@ -173,7 +211,7 @@ class _ViewOncePhotoViewerState extends State<ViewOncePhotoViewer> {
                         tooltip: 'Share photo',
                         onPressed: () {
                           SharePlus.instance.share(
-                            ShareParams(uri: Uri.parse(widget.imageUrl)),
+                            ShareParams(uri: Uri.parse(_effectiveUrl)),
                           );
                         },
                       ),
@@ -188,7 +226,7 @@ class _ViewOncePhotoViewerState extends State<ViewOncePhotoViewer> {
                     minScale: 0.8,
                     maxScale: 4.0,
                     child: Image.network(
-                      widget.imageUrl,
+                      _effectiveUrl,
                       fit: BoxFit.contain,
                       loadingBuilder: (context, child, loadingProgress) {
                         if (loadingProgress == null) return child;
