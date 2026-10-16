@@ -21,6 +21,8 @@ import 'package:love_app/features/scheduling/presentation/widgets/scheduled_date
 import 'package:love_app/features/onboarding/presentation/create_profile_screen.dart';
 import 'package:love_app/features/onboarding/presentation/welcome_screen.dart';
 import 'package:love_app/core/services/sound_service.dart';
+import 'package:love_app/core/services/update_service.dart';
+import 'package:love_app/core/widgets/update_dialog.dart';
 import 'package:love_app/features/memories/presentation/memories_inbox_modal.dart';
 import 'package:love_app/features/mood/presentation/widgets/sound_picker_modal.dart';
 
@@ -46,6 +48,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         setState(() {});
       }
     });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAutoUpdate();
+    });
+  }
+
+  Future<void> _checkAutoUpdate() async {
+    try {
+      final updateInfo = await UpdateService.checkForUpdate();
+      if (updateInfo != null && updateInfo.hasUpdate && mounted) {
+        UpdateDialog.show(context, updateInfo);
+      }
+    } catch (_) {}
   }
 
   @override
@@ -523,6 +537,83 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         ],
                       ),
                     ),
+                  ),
+                  const Divider(height: 24),
+                  FutureBuilder<String>(
+                    future: UpdateService.getCurrentVersion(),
+                    builder: (context, snapshot) {
+                      final version = snapshot.data ?? '1.0.1';
+                      return InkWell(
+                        onTap: () async {
+                          final messenger = ScaffoldMessenger.of(context);
+                          final updateInfo = await UpdateService.checkForUpdate();
+                          if (!context.mounted) return;
+                          if (updateInfo != null && updateInfo.hasUpdate) {
+                            Navigator.of(ctx).pop();
+                            UpdateDialog.show(context, updateInfo);
+                          } else {
+                            messenger.showSnackBar(
+                              SnackBar(
+                                backgroundColor: AppTheme.plum,
+                                content: Text('You are on the latest version! (v$version) ✨'),
+                                duration: const Duration(seconds: 3),
+                              ),
+                            );
+                          }
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 2),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: const BoxDecoration(
+                                  color: AppTheme.blush,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.system_update_rounded,
+                                  size: 20,
+                                  color: AppTheme.crimson,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'App Version',
+                                      style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold),
+                                    ),
+                                    Text(
+                                      'LoveSync v$version',
+                                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppTheme.plum),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.blush.withValues(alpha: 0.6),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Text(
+                                  'Check Updates',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppTheme.crimson,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
