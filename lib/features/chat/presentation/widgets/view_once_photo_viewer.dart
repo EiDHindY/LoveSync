@@ -1,4 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:gal/gal.dart';
+import 'package:http/http.dart' as http;
 import 'package:love_app/core/theme/app_theme.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -39,6 +42,41 @@ class ViewOncePhotoViewer extends StatefulWidget {
 
 class _ViewOncePhotoViewerState extends State<ViewOncePhotoViewer> {
   bool _burned = false;
+  bool _isSaving = false;
+  bool _savedToGallery = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _autoSaveToGallery();
+  }
+
+  Future<void> _autoSaveToGallery() async {
+    if (kIsWeb) return;
+    if (widget.imageUrl.isEmpty) return;
+    setState(() => _isSaving = true);
+    try {
+      final response = await http.get(Uri.parse(widget.imageUrl));
+      if (response.statusCode == 200) {
+        await Gal.putImageBytes(
+          response.bodyBytes,
+          album: 'LoveSync',
+          name: 'LoveSync_${DateTime.now().millisecondsSinceEpoch}',
+        );
+        if (mounted) {
+          setState(() {
+            _savedToGallery = true;
+            _isSaving = false;
+          });
+        }
+      } else {
+        if (mounted) setState(() => _isSaving = false);
+      }
+    } catch (e) {
+      debugPrint('Notice auto-saving photo to gallery: $e');
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
 
   void _closeAndBurn() {
     if (!_burned) {
@@ -75,37 +113,70 @@ class _ViewOncePhotoViewerState extends State<ViewOncePhotoViewer> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
+                          const Text(
                             'View-Once Photo',
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: Colors.white,
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                           Row(
-                            children: const [
-                              Icon(Icons.local_fire_department_rounded, color: AppTheme.crimson, size: 14),
-                              SizedBox(width: 4),
-                              Text(
-                                'Burns after viewing · Zero cloud storage',
-                                style: TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 11,
+                            children: [
+                              if (_isSaving) ...[
+                                const SizedBox(
+                                  width: 11,
+                                  height: 11,
+                                  child: CircularProgressIndicator(strokeWidth: 1.8, color: Colors.white70),
                                 ),
-                              ),
+                                const SizedBox(width: 5),
+                                const Text(
+                                  'Saving to Gallery...',
+                                  style: TextStyle(color: Colors.white70, fontSize: 11),
+                                ),
+                              ] else if (_savedToGallery) ...[
+                                const Icon(Icons.check_circle_rounded, color: Colors.greenAccent, size: 14),
+                                const SizedBox(width: 4),
+                                const Text(
+                                  'Saved to Gallery (LoveSync) ✓',
+                                  style: TextStyle(
+                                    color: Colors.greenAccent,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ] else ...[
+                                const Icon(Icons.local_fire_department_rounded, color: AppTheme.crimson, size: 14),
+                                const SizedBox(width: 4),
+                                const Text(
+                                  'Burns after viewing · Zero cloud storage',
+                                  style: TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                         ],
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.share_rounded, color: Colors.white, size: 24),
-                      tooltip: 'Save or share photo',
-                      onPressed: () {
-                        Share.shareUri(Uri.parse(widget.imageUrl));
-                      },
-                    ),
+                    if (_savedToGallery && !kIsWeb)
+                      IconButton(
+                        icon: const Icon(Icons.photo_library_rounded, color: Colors.greenAccent, size: 24),
+                        tooltip: 'Open in Phone Gallery',
+                        onPressed: () => Gal.open(),
+                      )
+                    else
+                      IconButton(
+                        icon: const Icon(Icons.share_rounded, color: Colors.white, size: 24),
+                        tooltip: 'Share photo',
+                        onPressed: () {
+                          SharePlus.instance.share(
+                            ShareParams(uri: Uri.parse(widget.imageUrl)),
+                          );
+                        },
+                      ),
                   ],
                 ),
               ),
@@ -158,11 +229,14 @@ class _ViewOncePhotoViewerState extends State<ViewOncePhotoViewer> {
                 color: Colors.black87,
                 child: Center(
                   child: Text(
-                    'Closing this screen will permanently delete the photo from cloud storage.',
+                    _savedToGallery
+                        ? '✓ Photo saved to your phone\'s Gallery. Closing will permanently delete it from chat and cloud storage.'
+                        : 'Closing this screen will permanently delete the photo from cloud storage.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.6),
+                      color: Colors.white.withValues(alpha: 0.7),
                       fontSize: 11,
+                      height: 1.3,
                     ),
                   ),
                 ),
