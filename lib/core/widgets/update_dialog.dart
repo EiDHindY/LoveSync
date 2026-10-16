@@ -187,31 +187,6 @@ class _UpdateDialogState extends State<UpdateDialog> {
             ),
             const SizedBox(height: 14),
 
-            // Release notes preview
-            if (info.releaseNotes.isNotEmpty) ...[
-              Container(
-                width: double.infinity,
-                constraints: const BoxConstraints(maxHeight: 120),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppTheme.backgroundLight,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.grey.shade200),
-                ),
-                child: SingleChildScrollView(
-                  child: Text(
-                    info.releaseNotes,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF555555),
-                      height: 1.35,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-            ],
-
             // Downloading Progress Indicator
             if (_isDownloading) ...[
               LinearProgressIndicator(
@@ -230,6 +205,18 @@ class _UpdateDialogState extends State<UpdateDialog> {
                   color: AppTheme.plum,
                 ),
               ),
+              if (_progress >= 0.9) ...[
+                const SizedBox(height: 4),
+                TextButton.icon(
+                  onPressed: _openBrowserFallback,
+                  icon: const Icon(Icons.open_in_browser_rounded, size: 14),
+                  label: const Text('Installer not opening? Tap for direct download', style: TextStyle(fontSize: 11)),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppTheme.crimson,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+              ],
               const SizedBox(height: 14),
             ],
 

@@ -33,14 +33,17 @@ class DashboardScreen extends ConsumerStatefulWidget {
   ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+class _DashboardScreenState extends ConsumerState<DashboardScreen> with WidgetsBindingObserver {
   int _currentIndex = 0;
   late final PageController _pageController;
   Timer? _autoCloseTimer;
+  Timer? _updateCheckTimer;
+  AppUpdateInfo? _availableUpdate;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _pageController = PageController();
     _autoCloseTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       if (mounted) {
@@ -49,22 +52,40 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       }
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkAutoUpdate();
+      _checkAutoUpdate(showPopup: true);
+    });
+    // Periodically re-check for updates every 15 minutes in background
+    _updateCheckTimer = Timer.periodic(const Duration(minutes: 15), (_) {
+      _checkAutoUpdate(showPopup: false);
     });
   }
 
-  Future<void> _checkAutoUpdate() async {
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkAutoUpdate(showPopup: false);
+    }
+  }
+
+  Future<void> _checkAutoUpdate({bool showPopup = false}) async {
     try {
       final updateInfo = await UpdateService.checkForUpdate();
       if (updateInfo != null && updateInfo.hasUpdate && mounted) {
-        UpdateDialog.show(context, updateInfo);
+        setState(() {
+          _availableUpdate = updateInfo;
+        });
+        if (showPopup) {
+          UpdateDialog.show(context, updateInfo);
+        }
       }
     } catch (_) {}
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _autoCloseTimer?.cancel();
+    _updateCheckTimer?.cancel();
     _pageController.dispose();
     super.dispose();
   }
@@ -553,12 +574,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     future: UpdateService.getCurrentVersion(),
                     builder: (context, snapshot) {
                       final version = snapshot.data ?? '1.0.1';
+                      final hasUpdate = _availableUpdate != null && _availableUpdate!.hasUpdate;
                       return InkWell(
                         onTap: () async {
                           final messenger = ScaffoldMessenger.of(context);
+                          if (hasUpdate) {
+                            Navigator.of(ctx).pop();
+                            UpdateDialog.show(context, _availableUpdate!);
+                            return;
+                          }
                           final updateInfo = await UpdateService.checkForUpdate();
                           if (!context.mounted) return;
                           if (updateInfo != null && updateInfo.hasUpdate) {
+                            setState(() => _availableUpdate = updateInfo);
                             Navigator.of(ctx).pop();
                             UpdateDialog.show(context, updateInfo);
                           } else {
@@ -578,12 +606,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             children: [
                               Container(
                                 padding: const EdgeInsets.all(8),
-                                decoration: const BoxDecoration(
-                                  color: AppTheme.blush,
+                                decoration: BoxDecoration(
+                                  color: hasUpdate ? AppTheme.crimson.withValues(alpha: 0.15) : AppTheme.blush,
                                   shape: BoxShape.circle,
                                 ),
-                                child: const Icon(
-                                  Icons.system_update_rounded,
+                                child: Icon(
+                                  hasUpdate ? Icons.rocket_launch_rounded : Icons.system_update_rounded,
                                   size: 20,
                                   color: AppTheme.crimson,
                                 ),
@@ -605,17 +633,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                 ),
                               ),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                                 decoration: BoxDecoration(
-                                  color: AppTheme.blush.withValues(alpha: 0.6),
+                                  color: hasUpdate ? AppTheme.crimson : AppTheme.blush.withValues(alpha: 0.6),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
-                                child: const Text(
-                                  'Check Updates',
+                                child: Text(
+                                  hasUpdate ? 'Update (v${_availableUpdate!.latestVersion}) 🚀' : 'Check Updates',
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
-                                    color: AppTheme.crimson,
+                                    color: hasUpdate ? Colors.white : AppTheme.crimson,
                                   ),
                                 ),
                               ),
@@ -743,6 +771,82 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         );
       }
     }
+  }
+
+  Widget _buildUpdateBanner(BuildContext context, AppUpdateInfo info) {
+    return Container(
+      margin: const EdgeInsets.only(left: 16, right: 16, top: 10, bottom: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppTheme.blush.withValues(alpha: 0.8),
+            Colors.white,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.crimson.withValues(alpha: 0.35), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.crimson.withValues(alpha: 0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(7),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.rocket_launch_rounded, color: AppTheme.crimson, size: 18),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Update Available (v${info.latestVersion}) 🚀',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.plum,
+                  ),
+                ),
+                const SizedBox(height: 1),
+                const Text(
+                  'Tap to install latest features & fixes',
+                  style: TextStyle(fontSize: 11, color: Colors.black54),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton(
+            onPressed: () => UpdateDialog.show(context, info),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.crimson,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              visualDensity: VisualDensity.compact,
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text(
+              'Update',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildConnectPartnerCard(BuildContext context, CoupleRepository repo) {
@@ -1789,30 +1893,45 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             child: InkWell(
               onTap: () => _openUserProfileModal(context, repo),
               borderRadius: BorderRadius.circular(20),
-              child: Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppTheme.surfaceContainerLow,
-                  border: Border.all(color: AppTheme.blush, width: 1.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF6B113B).withValues(alpha: 0.04),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: ClipOval(
-                  child: repo.userAvatarUrl.isNotEmpty
-                      ? Image.network(
-                          repo.userAvatarUrl,
-                          width: 30,
-                          height: 30,
-                          fit: BoxFit.cover,
-                          webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
-                          errorBuilder: (_, _, _) => Center(
+              child: Badge(
+                isLabelVisible: _availableUpdate != null && _availableUpdate!.hasUpdate,
+                backgroundColor: AppTheme.crimson,
+                smallSize: 9,
+                child: Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppTheme.surfaceContainerLow,
+                    border: Border.all(color: AppTheme.blush, width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF6B113B).withValues(alpha: 0.04),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: ClipOval(
+                    child: repo.userAvatarUrl.isNotEmpty
+                        ? Image.network(
+                            repo.userAvatarUrl,
+                            width: 30,
+                            height: 30,
+                            fit: BoxFit.cover,
+                            webHtmlElementStrategy: WebHtmlElementStrategy.prefer,
+                            errorBuilder: (_, _, _) => Center(
+                              child: Text(
+                                repo.currentUserName.isNotEmpty ? repo.currentUserName[0].toUpperCase() : 'U',
+                                style: const TextStyle(
+                                  color: AppTheme.crimson,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          )
+                        : Center(
                             child: Text(
                               repo.currentUserName.isNotEmpty ? repo.currentUserName[0].toUpperCase() : 'U',
                               style: const TextStyle(
@@ -1822,21 +1941,33 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               ),
                             ),
                           ),
-                        )
-                      : Center(
-                          child: Text(
-                            repo.currentUserName.isNotEmpty ? repo.currentUserName[0].toUpperCase() : 'U',
-                            style: const TextStyle(
-                              color: AppTheme.crimson,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
+                  ),
                 ),
               ),
             ),
           ),
+          if (_availableUpdate != null && _availableUpdate!.hasUpdate)
+            IconButton(
+              tooltip: 'Update to v${_availableUpdate!.latestVersion} Available!',
+              icon: Badge(
+                backgroundColor: AppTheme.crimson,
+                label: const Text('NEW', style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold)),
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: AppTheme.blush,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppTheme.crimson, width: 1.5),
+                  ),
+                  child: const Icon(
+                    Icons.system_update_rounded,
+                    color: AppTheme.crimson,
+                    size: 18,
+                  ),
+                ),
+              ),
+              onPressed: () => UpdateDialog.show(context, _availableUpdate!),
+            ),
           IconButton(
             tooltip: 'Memories & Spark Inbox',
             icon: Badge(
@@ -1856,9 +1987,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ),
           PopupMenuButton<String>(
             padding: const EdgeInsets.only(right: 6),
-            icon: const Icon(Icons.more_vert, color: AppTheme.plum),
+            icon: Badge(
+              isLabelVisible: _availableUpdate != null && _availableUpdate!.hasUpdate,
+              backgroundColor: AppTheme.crimson,
+              smallSize: 8,
+              child: const Icon(Icons.more_vert, color: AppTheme.plum),
+            ),
             onSelected: (val) async {
-              if (val == 'memories') {
+              if (val == 'update_app' && _availableUpdate != null) {
+                UpdateDialog.show(context, _availableUpdate!);
+              } else if (val == 'memories') {
                 _openMemoriesModal(context);
               } else if (val == 'partner_info') {
                 _openPartnerModal(context);
@@ -1881,6 +2019,22 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               }
             },
             itemBuilder: (ctx) => [
+              if (_availableUpdate != null && _availableUpdate!.hasUpdate) ...[
+                PopupMenuItem(
+                  value: 'update_app',
+                  child: Row(
+                    children: [
+                      const Icon(Icons.rocket_launch_rounded, size: 18, color: AppTheme.crimson),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Update App (v${_availableUpdate!.latestVersion}) 🚀',
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.crimson),
+                      ),
+                    ],
+                  ),
+                ),
+                const PopupMenuDivider(),
+              ],
               PopupMenuItem(
                 value: 'memories',
                 child: Row(
@@ -1952,16 +2106,24 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         ],
       ),
       body: SafeArea(
-        child: PageView(
-          controller: _pageController,
-          onPageChanged: (index) {
-            setState(() {
-              _currentIndex = index;
-            });
-          },
+        child: Column(
           children: [
-            _buildSexTab(context, repo, mood, nextDate, unreadCount),
-            _buildCycleTab(context, repo, fertility),
+            if (_availableUpdate != null && _availableUpdate!.hasUpdate)
+              _buildUpdateBanner(context, _availableUpdate!),
+            Expanded(
+              child: PageView(
+                controller: _pageController,
+                onPageChanged: (index) {
+                  setState(() {
+                    _currentIndex = index;
+                  });
+                },
+                children: [
+                  _buildSexTab(context, repo, mood, nextDate, unreadCount),
+                  _buildCycleTab(context, repo, fertility),
+                ],
+              ),
+            ),
           ],
         ),
       ),

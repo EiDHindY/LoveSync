@@ -133,6 +133,7 @@ class UpdateService {
     return OtaUpdate().execute(
       apkUrl,
       destinationFilename: 'LoveSync.apk',
+      androidProviderAuthority: 'com.lovesync.love_app.ota_update_provider',
     );
   }
 }
