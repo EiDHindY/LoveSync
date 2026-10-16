@@ -786,7 +786,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> with WidgetsB
         memories: memories,
         scheduledDates: scheduledDates,
         onClearAll: () async {
-          await ref.read(coupleRepositoryProvider.notifier).clearAllMemories();
+          await ref.read(coupleRepositoryProvider.notifier).clearAllMemoriesAndDates();
+        },
+        onClearSparks: () async {
+          await ref.read(coupleRepositoryProvider.notifier).clearSparkMemories();
+        },
+        onClearDates: () async {
+          await ref.read(coupleRepositoryProvider.notifier).clearScheduledDates();
         },
         onOpenPairing: () {
           Navigator.of(ctx).pop();

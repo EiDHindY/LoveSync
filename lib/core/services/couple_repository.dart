@@ -341,13 +341,97 @@ class CoupleRepository extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> clearAllMemories() async {
+  Future<void> clearSparkMemories() async {
+    _memories.removeWhere((m) => m.type.startsWith('spark'));
+    _readMemoryIds.removeWhere((id) => !_memories.any((m) => m.id == id));
+    await _saveToStorage();
+
+    if (SupabaseConfig.isInitialized && _coupleId.isNotEmpty) {
+      try {
+        await Supabase.instance.client
+            .from('couple_memories')
+            .delete()
+            .eq('couple_id', _coupleId)
+            .like('type', 'spark%');
+      } catch (e) {
+        debugPrint('Notice deleting spark memories: $e');
+      }
+    }
+
+    if (_realtimeChannel != null) {
+      try {
+        await _realtimeChannel!.sendBroadcastMessage(
+          event: 'memories_cleared',
+          payload: {'couple_id': _coupleId, 'target': 'sparks'},
+        );
+      } catch (e) {
+        debugPrint('Broadcast memories_cleared error: $e');
+      }
+    }
+    notifyListeners();
+  }
+
+  Future<void> clearScheduledDates() async {
+    for (final d in _scheduledDates) {
+      _cancelNudgesForDate(d.id);
+    }
+    _scheduledDates.clear();
+    _memories.removeWhere((m) => !m.type.startsWith('spark'));
+    _readMemoryIds.removeWhere((id) => !_memories.any((m) => m.id == id));
+    await _saveToStorage();
+
+    if (SupabaseConfig.isInitialized && _coupleId.isNotEmpty) {
+      try {
+        await Supabase.instance.client
+            .from('scheduled_intimacy')
+            .delete()
+            .eq('couple_id', _coupleId);
+      } catch (e) {
+        debugPrint('Notice deleting scheduled_intimacy: $e');
+      }
+      try {
+        await Supabase.instance.client
+            .from('couple_memories')
+            .delete()
+            .eq('couple_id', _coupleId)
+            .not('type', 'like', 'spark%');
+      } catch (e) {
+        debugPrint('Notice deleting date memories: $e');
+      }
+    }
+
+    if (_realtimeChannel != null) {
+      try {
+        await _realtimeChannel!.sendBroadcastMessage(
+          event: 'memories_cleared',
+          payload: {'couple_id': _coupleId, 'target': 'dates'},
+        );
+      } catch (e) {
+        debugPrint('Broadcast memories_cleared error: $e');
+      }
+    }
+    notifyListeners();
+  }
+
+  Future<void> clearAllMemoriesAndDates() async {
+    for (final d in _scheduledDates) {
+      _cancelNudgesForDate(d.id);
+    }
+    _scheduledDates.clear();
     _memories.clear();
     _readMemoryIds.clear();
     _lastViewedMemoriesAt = null;
     await _saveToStorage();
 
     if (SupabaseConfig.isInitialized && _coupleId.isNotEmpty) {
+      try {
+        await Supabase.instance.client
+            .from('scheduled_intimacy')
+            .delete()
+            .eq('couple_id', _coupleId);
+      } catch (e) {
+        debugPrint('Notice deleting scheduled_intimacy: $e');
+      }
       try {
         await Supabase.instance.client.rpc('clear_couple_memories', params: {
           'p_couple_id': _coupleId,
@@ -369,7 +453,7 @@ class CoupleRepository extends ChangeNotifier {
       try {
         await _realtimeChannel!.sendBroadcastMessage(
           event: 'memories_cleared',
-          payload: {'couple_id': _coupleId},
+          payload: {'couple_id': _coupleId, 'target': 'both'},
         );
       } catch (e) {
         debugPrint('Broadcast memories_cleared error: $e');
@@ -377,6 +461,8 @@ class CoupleRepository extends ChangeNotifier {
     }
     notifyListeners();
   }
+
+  Future<void> clearAllMemories() => clearAllMemoriesAndDates();
 
   // Direct Messages & Chat Getters
   List<ChatMessage> get chatMessages => List.unmodifiable(_chatMessages);
@@ -1340,9 +1426,26 @@ class CoupleRepository extends ChangeNotifier {
           .onBroadcast(
             event: 'memories_cleared',
             callback: (payload) {
-              _memories.clear();
-              _readMemoryIds.clear();
-              _lastViewedMemoriesAt = null;
+              final target = payload['target'] as String?;
+              if (target == 'sparks') {
+                _memories.removeWhere((m) => m.type.startsWith('spark'));
+                _readMemoryIds.removeWhere((id) => !_memories.any((m) => m.id == id));
+              } else if (target == 'dates') {
+                for (final d in _scheduledDates) {
+                  _cancelNudgesForDate(d.id);
+                }
+                _scheduledDates.clear();
+                _memories.removeWhere((m) => !m.type.startsWith('spark'));
+                _readMemoryIds.removeWhere((id) => !_memories.any((m) => m.id == id));
+              } else {
+                for (final d in _scheduledDates) {
+                  _cancelNudgesForDate(d.id);
+                }
+                _memories.clear();
+                _scheduledDates.clear();
+                _readMemoryIds.clear();
+                _lastViewedMemoriesAt = null;
+              }
               _saveToStorage();
               notifyListeners();
             },

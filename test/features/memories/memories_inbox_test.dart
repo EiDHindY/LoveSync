@@ -156,4 +156,76 @@ void main() {
 
     expect(pairingOpened, isTrue);
   });
+
+  testWidgets('MemoriesInboxModal clear icon shows selective options and triggers callbacks', (tester) async {
+    bool sparksCleared = false;
+    bool datesCleared = false;
+    bool allCleared = false;
+
+    final memories = [
+      CoupleMemory(
+        id: '1',
+        coupleId: 'couple-1',
+        type: 'spark_match',
+        title: 'Spark Ignited! 🔥',
+        description: 'Mutual match! Both of you lit your sparks.',
+        windowKey: '2026-10-15-NIGHT',
+        createdAt: DateTime.now().subtract(const Duration(minutes: 5)),
+      ),
+      CoupleMemory(
+        id: '2',
+        coupleId: 'couple-1',
+        type: 'date_night',
+        title: 'Date Night Confirmed! ✨',
+        description: 'Date scheduled with Lola for Friday.',
+        windowKey: 'Fri, Oct 16',
+        createdAt: DateTime.now().subtract(const Duration(hours: 1)),
+      ),
+    ];
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          theme: AppTheme.lightTheme,
+          home: Scaffold(
+            body: MemoriesInboxModal(
+              memories: memories,
+              onClearSparks: () async => sparksCleared = true,
+              onClearDates: () async => datesCleared = true,
+              onClearAll: () async => allCleared = true,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Verify clear icon button is present
+    final clearBtn = find.byIcon(Icons.delete_outline_rounded);
+    expect(clearBtn, findsOneWidget);
+
+    // Tap clear button
+    await tester.tap(clearBtn);
+    await tester.pumpAndSettle();
+
+    // Verify the selective clear dialog options appear
+    expect(find.text('Clear Inbox Items'), findsOneWidget);
+    expect(find.text('Choose what you would like to clear:'), findsOneWidget);
+    expect(find.text('Mutual Sparks'), findsOneWidget);
+    expect(find.text('Scheduled Dates'), findsOneWidget);
+    expect(find.text('Both (Sparks & Dates)'), findsOneWidget);
+
+    // Select Scheduled Dates
+    await tester.tap(find.text('Scheduled Dates'));
+    await tester.pumpAndSettle();
+
+    // The action button should now say "Clear Dates"
+    expect(find.text('Clear Dates'), findsOneWidget);
+    await tester.tap(find.text('Clear Dates'));
+    await tester.pumpAndSettle();
+
+    expect(datesCleared, isTrue);
+    expect(sparksCleared, isFalse);
+    expect(allCleared, isFalse);
+  });
 }

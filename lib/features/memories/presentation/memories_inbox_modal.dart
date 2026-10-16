@@ -9,10 +9,14 @@ import 'package:love_app/features/scheduling/domain/scheduled_intimacy.dart';
 
 enum MemoryFilter { all, sparks, dates, chat }
 
+enum ClearTarget { sparks, dates, both }
+
 class MemoriesInboxModal extends ConsumerStatefulWidget {
   final List<CoupleMemory> memories;
   final List<ScheduledIntimacy>? scheduledDates;
   final Future<void> Function()? onClearAll;
+  final Future<void> Function()? onClearSparks;
+  final Future<void> Function()? onClearDates;
   final VoidCallback? onOpenPairing;
   final MemoryFilter initialFilter;
 
@@ -21,6 +25,8 @@ class MemoriesInboxModal extends ConsumerStatefulWidget {
     required this.memories,
     this.scheduledDates,
     this.onClearAll,
+    this.onClearSparks,
+    this.onClearDates,
     this.onOpenPairing,
     this.initialFilter = MemoryFilter.all,
   });
@@ -31,6 +37,7 @@ class MemoriesInboxModal extends ConsumerStatefulWidget {
 
 class _MemoriesInboxModalState extends ConsumerState<MemoriesInboxModal> {
   late MemoryFilter _selectedFilter;
+  bool _hasModifiedState = false;
 
   @override
   void initState() {
@@ -65,24 +72,31 @@ class _MemoriesInboxModalState extends ConsumerState<MemoriesInboxModal> {
 
   @override
   Widget build(BuildContext context) {
+    final providerMemories = ref.watch(coupleMemoriesProvider);
+    final providerDates = ref.watch(scheduledDatesProvider);
+    final activeMemories = _hasModifiedState || providerMemories.isNotEmpty
+        ? providerMemories
+        : widget.memories;
+    final activeScheduledDates = _hasModifiedState || providerDates.isNotEmpty
+        ? providerDates
+        : (widget.scheduledDates ?? []);
+
     // Separate into two distinct sections: Mutual Sparks & Scheduled Dates
-    final sparkMemories = widget.memories.where((m) => m.type.startsWith('spark')).toList();
-    final dateMemories = widget.memories.where((m) => !m.type.startsWith('spark')).toList();
+    final sparkMemories = activeMemories.where((m) => m.type.startsWith('spark')).toList();
+    final dateMemories = activeMemories.where((m) => !m.type.startsWith('spark')).toList();
 
     // Deduplicate scheduled dates so dates already represented as dateMemories aren't doubled
     final List<ScheduledIntimacy> nonDuplicateScheduled = [];
-    if (widget.scheduledDates != null) {
-      for (final date in widget.scheduledDates!) {
-        final dateDayStr = DateFormat('EEE, MMM d').format(date.scheduledAt);
-        final alreadyLogged = dateMemories.any((m) => m.windowKey == dateDayStr);
-        if (!alreadyLogged) {
-          nonDuplicateScheduled.add(date);
-        }
+    for (final date in activeScheduledDates) {
+      final dateDayStr = DateFormat('EEE, MMM d').format(date.scheduledAt);
+      final alreadyLogged = dateMemories.any((m) => m.windowKey == dateDayStr);
+      if (!alreadyLogged) {
+        nonDuplicateScheduled.add(date);
       }
     }
 
     final totalDateItems = dateMemories.length + nonDuplicateScheduled.length;
-    final totalMoments = widget.memories.length + nonDuplicateScheduled.length;
+    final totalMoments = activeMemories.length + nonDuplicateScheduled.length;
     final isEmpty = totalMoments == 0;
     final unreadChatCount = ref.watch(unreadChatCountProvider);
     final isChatTab = _selectedFilter == MemoryFilter.chat;
@@ -158,40 +172,140 @@ class _MemoriesInboxModalState extends ConsumerState<MemoriesInboxModal> {
                       ],
                     ),
                   ),
-                  if (!isEmpty && widget.onClearAll != null)
+                  if (!isEmpty && (widget.onClearAll != null || widget.onClearSparks != null || widget.onClearDates != null))
                     IconButton(
-                      tooltip: 'Clear memories',
+                      tooltip: 'Clear items',
                       icon: const Icon(Icons.delete_outline_rounded, color: Colors.grey, size: 20),
                       onPressed: () async {
-                        final confirmed = await showDialog<bool>(
+                        ClearTarget selectedTarget = (_selectedFilter == MemoryFilter.dates)
+                            ? ClearTarget.dates
+                            : (_selectedFilter == MemoryFilter.sparks)
+                                ? ClearTarget.sparks
+                                : ClearTarget.both;
+
+                        final chosenTarget = await showDialog<ClearTarget>(
                           context: context,
-                          builder: (ctx) => AlertDialog(
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                            title: const Text('Clear All Memories?'),
-                            content: const Text(
-                              'This will remove all documented moments so you can retest memories from scratch.',
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.of(ctx).pop(false),
-                                child: const Text('Cancel'),
-                              ),
-                              ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppTheme.crimson,
-                                  foregroundColor: Colors.white,
+                          builder: (dialogCtx) => StatefulBuilder(
+                            builder: (ctx, setDialogState) {
+                              return AlertDialog(
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                titlePadding: const EdgeInsets.fromLTRB(22, 22, 22, 8),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                                actionsPadding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                                title: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: const BoxDecoration(
+                                        color: AppTheme.blush,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(Icons.delete_sweep_rounded, color: AppTheme.crimson, size: 20),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    const Expanded(
+                                      child: Text(
+                                        'Clear Inbox Items',
+                                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.plum),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                onPressed: () => Navigator.of(ctx).pop(true),
-                                child: const Text('Clear All'),
-                              ),
-                            ],
+                                content: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Choose what you would like to clear:',
+                                      style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                                    ),
+                                    const SizedBox(height: 14),
+
+                                    // Option 1: Mutual Sparks
+                                    _buildClearOptionTile(
+                                      title: 'Mutual Sparks',
+                                      subtitle: '${sparkMemories.length} spark moment${sparkMemories.length == 1 ? '' : 's'}',
+                                      icon: Icons.local_fire_department_rounded,
+                                      iconColor: const Color(0xFFF97316),
+                                      target: ClearTarget.sparks,
+                                      isSelected: selectedTarget == ClearTarget.sparks,
+                                      onTap: () => setDialogState(() => selectedTarget = ClearTarget.sparks),
+                                    ),
+                                    const SizedBox(height: 8),
+
+                                    // Option 2: Scheduled Dates
+                                    _buildClearOptionTile(
+                                      title: 'Scheduled Dates',
+                                      subtitle: '$totalDateItems scheduled date${totalDateItems == 1 ? '' : 's'} & proposals',
+                                      icon: Icons.event_available_rounded,
+                                      iconColor: AppTheme.crimson,
+                                      target: ClearTarget.dates,
+                                      isSelected: selectedTarget == ClearTarget.dates,
+                                      onTap: () => setDialogState(() => selectedTarget = ClearTarget.dates),
+                                    ),
+                                    const SizedBox(height: 8),
+
+                                    // Option 3: Both
+                                    _buildClearOptionTile(
+                                      title: 'Both (Sparks & Dates)',
+                                      subtitle: '$totalMoments total documented moment${totalMoments == 1 ? '' : 's'}',
+                                      icon: Icons.auto_awesome_rounded,
+                                      iconColor: const Color(0xFF8B5CF6),
+                                      target: ClearTarget.both,
+                                      isSelected: selectedTarget == ClearTarget.both,
+                                      onTap: () => setDialogState(() => selectedTarget = ClearTarget.both),
+                                    ),
+                                  ],
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.of(ctx).pop(null),
+                                    child: const Text('Cancel', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+                                  ),
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppTheme.crimson,
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+                                    ),
+                                    onPressed: () => Navigator.of(ctx).pop(selectedTarget),
+                                    child: Text(
+                                      selectedTarget == ClearTarget.sparks
+                                          ? 'Clear Sparks'
+                                          : selectedTarget == ClearTarget.dates
+                                              ? 'Clear Dates'
+                                              : 'Clear Both',
+                                      style: const TextStyle(fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
                           ),
                         );
-                        if (confirmed == true) {
-                          await widget.onClearAll!();
-                          if (context.mounted) {
-                            Navigator.of(context).pop();
+
+                        if (chosenTarget != null) {
+                          if (chosenTarget == ClearTarget.sparks) {
+                            if (widget.onClearSparks != null) {
+                              await widget.onClearSparks!();
+                            } else if (widget.onClearAll != null) {
+                              await widget.onClearAll!();
+                            }
+                          } else if (chosenTarget == ClearTarget.dates) {
+                            if (widget.onClearDates != null) {
+                              await widget.onClearDates!();
+                            } else if (widget.onClearAll != null) {
+                              await widget.onClearAll!();
+                            }
+                          } else if (chosenTarget == ClearTarget.both) {
+                            if (widget.onClearAll != null) {
+                              await widget.onClearAll!();
+                            }
                           }
+                          setState(() {
+                            _hasModifiedState = true;
+                          });
                         }
                       },
                     ),
@@ -852,6 +966,73 @@ class _MemoriesInboxModalState extends ConsumerState<MemoriesInboxModal> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildClearOptionTile({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color iconColor,
+    required ClearTarget target,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.blush.withValues(alpha: 0.5) : Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? AppTheme.crimson : Colors.grey.shade200,
+            width: isSelected ? 1.6 : 1.0,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(7),
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: iconColor, size: 18),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.bold,
+                      color: isSelected ? AppTheme.plum : Colors.grey.shade800,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              isSelected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+              color: isSelected ? AppTheme.crimson : Colors.grey.shade400,
+              size: 20,
+            ),
+          ],
+        ),
       ),
     );
   }
