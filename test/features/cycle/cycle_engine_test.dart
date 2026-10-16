@@ -155,6 +155,25 @@ void main() {
       expect(day4.title, contains('Period + Fertile Buffer'));
     });
 
+    test('31-day cycle: Days 6, 7, 8 after menstruation are classified as Pre-Ovulation Caution Buffer', () {
+      // In a 31-day cycle with 5-day period:
+      // Menstruation: Days 1-5
+      // Pre-ovulation Caution Buffer: Days 6-11 (including Day 8)
+      // Core Fertile: Days 12-17 (Ovulation on Day 17)
+      for (final dayIndex in [5, 6, 7]) { // Days 6, 7, 8 (0-indexed offset 5, 6, 7)
+        final info = CycleEngine.calculateFertility(
+          targetDate: basePeriodStart.add(Duration(days: dayIndex)),
+          lastPeriodStartDate: basePeriodStart,
+          cycleLength: 31,
+          periodLength: 5,
+          safetyBufferDays: 3,
+        );
+        expect(info.dayOfCycle, equals(dayIndex + 1));
+        expect(info.phase, equals(FertilityPhase.caution));
+        expect(info.title, contains('Caution / Pre-Ovulation Buffer'));
+      }
+    });
+
     test('Safety buffer clamping: cannot go below 2 days', () {
       // Even if safetyBufferDays = 0 or 1 is passed, it must clamp to 2
       final day17WithBuffer1 = CycleEngine.calculateFertility(

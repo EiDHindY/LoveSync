@@ -36,11 +36,7 @@ class CycleCalculationDialog extends StatelessWidget {
     final coreFertileEnd = ovulationDay;
     final effectiveBuffer = safetyBufferDays < 2 ? 2 : safetyBufferDays;
 
-    int rawBufferStart = (ovulationDay - effectiveBuffer) - 5;
-    if (rawBufferStart - (periodLength + 1) <= 1 && rawBufferStart > periodLength) {
-      rawBufferStart = periodLength + 1;
-    }
-    final bufferStart = rawBufferStart;
+    final bufferStart = periodLength + 1;
     final bufferEnd = (ovulationDay + effectiveBuffer) + 1;
     final safeStart = bufferEnd + 1;
     final lutealSafeDaysCount = cycleLength - safeStart + 1;
@@ -133,9 +129,9 @@ class CycleCalculationDialog extends StatelessWidget {
               color: const Color(0xFFF59E0B),
               badgeColor: const Color(0xFFFEF3C7),
               textColor: const Color(0xFF92400E),
-              summary: 'Protected sex recommended (condom/withdrawal). Guards against early ovulation + 5-day sperm life.',
-              details: '• Sensiplan 5-Day Rule: Eliminates the dangerous 1-day "safe" island on Day 6.\n'
-                  '• Biology: Ovulation can arrive as early as Day ${ovulationDay - safetyBufferDays}. Because sperm survive up to 5 days (120h) in fertile mucus, intercourse here carries real pregnancy risk.',
+              summary: 'Protected sex recommended (condom/withdrawal). Pre-ovulatory caution extends directly from end of menstruation.',
+              details: '• Sperm Longevity: Sperm survive up to 5 days (120h) in fertile reproductive mucus.\n'
+                  '• Early Ovulation Guard: Ovulation can arrive earlier than estimated due to stress, travel, or cycle shifts. Intercourse after menstruation carries pregnancy risk.',
             ),
             const SizedBox(height: 10),
 

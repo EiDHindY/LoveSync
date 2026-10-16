@@ -50,15 +50,10 @@ class CycleEngine {
     final coreFertileEnd = ovulationDay;
 
     // Safety buffer boundaries:
-    // Left-tail: Guards against early ovulation (E[O] - effectiveBuffer) with 5-day sperm survival.
-    // Sensiplan / Clinical Rule: If the gap between menses end and the fertile buffer is <= 1 day (e.g. Day 6),
-    // an isolated 1-day safe window is biologically hazardous (sperm can survive 5 days to an early ovulation).
-    // Therefore, pre-ovulatory caution extends immediately from the end of the period.
-    int rawBufferStart = (ovulationDay - effectiveBuffer) - 5;
-    if (rawBufferStart - (periodLength + 1) <= 1 && rawBufferStart > periodLength) {
-      rawBufferStart = periodLength + 1;
-    }
-    final bufferStart = rawBufferStart;
+    // Pre-ovulatory caution extends immediately from the end of menstruation (periodLength + 1)
+    // to the start of the core fertile window. Any intercourse after menstruation carries real pregnancy
+    // risk because sperm survives up to 5 days and ovulation timing can shift earlier than expected.
+    final bufferStart = periodLength + 1;
 
     // Right-tail: Guards against delayed ovulation (E[O] + effectiveBuffer) + 24h (1 day) oocyte viability
     final bufferEnd = (ovulationDay + effectiveBuffer) + 1;
@@ -66,7 +61,8 @@ class CycleEngine {
     // Check Menstruation first
     if (dayOfCycle >= 1 && dayOfCycle <= periodLength) {
       // If cycle is unusually short, period might overlap with fertile buffer
-      if (dayOfCycle >= bufferStart) {
+      final effectiveFertileBufferStart = (ovulationDay - effectiveBuffer) - 5;
+      if (dayOfCycle >= coreFertileStart || dayOfCycle >= effectiveFertileBufferStart) {
         return DailyFertilityInfo(
           date: targetDate,
           phase: FertilityPhase.caution,
@@ -121,24 +117,22 @@ class CycleEngine {
         recommendation:
             'Buffer zone. Protected sex (condom/withdrawal) strongly recommended.',
         rationale: isPreOvulation
-            ? 'Ovulation can arrive up to $safetyBufferDays days early; sperm can survive up to 5 days.'
-            : 'Ovulation can be delayed up to $safetyBufferDays days, plus up to 24 hours of ovum viability.',
+            ? 'Pre-ovulation phase: ovulation can arrive early; sperm can survive up to 5 days.'
+            : 'Ovulation can be delayed up to $effectiveBuffer days, plus up to 24 hours of ovum viability.',
       );
     }
 
-    // Safe Window
-    final isPostOvulation = dayOfCycle > bufferEnd;
+    // Safe Window (Post-Ovulation Luteal Phase)
     return DailyFertilityInfo(
       date: targetDate,
       phase: FertilityPhase.safe,
       dayOfCycle: dayOfCycle,
       cycleLength: cycleLength,
-      title: isPostOvulation ? 'Safe Window (Post-Ovulation)' : 'Safe Window (Pre-Fertile)',
+      title: 'Safe Window (Post-Ovulation)',
       recommendation:
           'Lowest probability of pregnancy. Safe for unprotected ejaculation if cycle is regular.',
-      rationale: isPostOvulation
-          ? 'Egg has dissolved for this cycle; next ovulation cannot occur until the following cycle.'
-          : 'Sufficiently far in advance of the estimated ovulation window.',
+      rationale:
+          'Egg has dissolved for this cycle; next ovulation cannot occur until the following cycle.',
     );
   }
 

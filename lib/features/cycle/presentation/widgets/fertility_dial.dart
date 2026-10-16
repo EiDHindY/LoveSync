@@ -50,11 +50,7 @@ class FertilityDial extends StatelessWidget {
     final coreFertileStart = ovulationDay - 5;
     final coreFertileEnd = ovulationDay;
     final effectiveBuffer = safetyBufferDays < 2 ? 2 : safetyBufferDays;
-    int rawBufferStart = (ovulationDay - effectiveBuffer) - 5;
-    if (rawBufferStart - (periodLength + 1) <= 1 && rawBufferStart > periodLength) {
-      rawBufferStart = periodLength + 1;
-    }
-    final bufferStart = rawBufferStart;
+    final bufferStart = periodLength + 1;
     final bufferEnd = (ovulationDay + effectiveBuffer) + 1;
 
     // Pill badge colors & label
@@ -485,18 +481,7 @@ class _SegmentedCyclePainter extends CustomPainter {
       opacity: 0.95,
     );
 
-    // Segment 2: Pre-fertile Safe Phase (Days periodLength + 1 to bufferStart - 1)
-    if (bufferStart > periodLength + 1) {
-      drawSegment(
-        startDay: periodLength + 1,
-        endDay: bufferStart - 1,
-        color: const Color(0xFF10B981),
-        width: 13.0,
-        opacity: 1.0,
-      );
-    }
-
-    // Segment 3: Caution Buffer (Pre-ovulation: Days bufferStart to coreFertileStart - 1)
+    // Segment 2: Caution Buffer (Pre-ovulation: Days bufferStart to coreFertileStart - 1)
     if (coreFertileStart > bufferStart) {
       drawSegment(
         startDay: bufferStart,
