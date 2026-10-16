@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:love_app/core/theme/app_theme.dart';
 import 'package:love_app/features/memories/domain/couple_memory.dart';
@@ -7,10 +8,12 @@ import 'package:love_app/features/memories/presentation/memories_inbox_modal.dar
 void main() {
   testWidgets('MemoriesInboxModal renders empty state when no memories', (tester) async {
     await tester.pumpWidget(
-      MaterialApp(
-        theme: AppTheme.lightTheme,
-        home: const Scaffold(
-          body: MemoriesInboxModal(memories: []),
+      ProviderScope(
+        child: MaterialApp(
+          theme: AppTheme.lightTheme,
+          home: const Scaffold(
+            body: MemoriesInboxModal(memories: []),
+          ),
         ),
       ),
     );
@@ -44,10 +47,12 @@ void main() {
     ];
 
     await tester.pumpWidget(
-      MaterialApp(
-        theme: AppTheme.lightTheme,
-        home: Scaffold(
-          body: MemoriesInboxModal(memories: memories),
+      ProviderScope(
+        child: MaterialApp(
+          theme: AppTheme.lightTheme,
+          home: Scaffold(
+            body: MemoriesInboxModal(memories: memories),
+          ),
         ),
       ),
     );
@@ -83,10 +88,12 @@ void main() {
     ];
 
     await tester.pumpWidget(
-      MaterialApp(
-        theme: AppTheme.lightTheme,
-        home: Scaffold(
-          body: MemoriesInboxModal(memories: memories),
+      ProviderScope(
+        child: MaterialApp(
+          theme: AppTheme.lightTheme,
+          home: Scaffold(
+            body: MemoriesInboxModal(memories: memories),
+          ),
         ),
       ),
     );
@@ -104,6 +111,7 @@ void main() {
     expect(find.text('All (2)'), findsOneWidget);
     expect(find.text('Mutual Sparks (1)'), findsOneWidget);
     expect(find.text('Scheduled Dates (1)'), findsOneWidget);
+    expect(find.text('Direct Chat'), findsOneWidget);
 
     // Tap on Scheduled Dates filter pill
     await tester.tap(find.text('Scheduled Dates (1)'));
@@ -112,5 +120,40 @@ void main() {
     // Only Scheduled Dates section is visible
     expect(find.text('SCHEDULED DATES'), findsOneWidget);
     expect(find.text('MUTUAL SPARKS'), findsNothing);
+  });
+
+  testWidgets('MemoriesInboxModal switches to Direct Chat tab', (tester) async {
+    bool pairingOpened = false;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          theme: AppTheme.lightTheme,
+          home: Scaffold(
+            body: MemoriesInboxModal(
+              memories: const [],
+              onOpenPairing: () {
+                pairingOpened = true;
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Direct Chat'), findsOneWidget);
+    await tester.ensureVisible(find.text('Direct Chat'));
+    await tester.tap(find.text('Direct Chat'));
+    await tester.pumpAndSettle();
+
+    // Since repository is not paired in default test state, it should show unpaired prompt
+    expect(find.text('Pair to Start Chatting'), findsOneWidget);
+    expect(find.text('Add Partner'), findsOneWidget);
+
+    await tester.tap(find.text('Add Partner'));
+    await tester.pumpAndSettle();
+
+    expect(pairingOpened, isTrue);
   });
 }

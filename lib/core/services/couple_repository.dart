@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import 'package:love_app/core/config/supabase_config.dart';
 import 'package:love_app/core/services/notification_service.dart';
+import 'package:love_app/features/chat/domain/chat_message.dart';
 import 'package:love_app/features/cycle/domain/cycle_engine.dart';
 import 'package:love_app/features/memories/domain/couple_memory.dart';
 import 'package:love_app/features/mood/domain/mood_status.dart';
@@ -54,6 +55,9 @@ class CoupleRepository extends ChangeNotifier {
   final List<CoupleMemory> _memories = [];
   final Set<String> _readMemoryIds = {};
   DateTime? _lastViewedMemoriesAt;
+
+  // Direct Messages & Chat
+  final List<ChatMessage> _chatMessages = [];
 
   RealtimeChannel? _realtimeChannel;
 
@@ -371,7 +375,294 @@ class CoupleRepository extends ChangeNotifier {
         debugPrint('Broadcast memories_cleared error: $e');
       }
     }
+    notifyListeners();
+  }
 
+  // Direct Messages & Chat Getters
+  List<ChatMessage> get chatMessages => List.unmodifiable(_chatMessages);
+  int get unreadChatCount => _chatMessages.where((m) => m.senderId != _currentUserId && m.readAt == null).length;
+
+  // ══════════════════════════════════════════════════════
+  // DIRECT MESSAGES (DM) CHAT ENGINE
+  // ══════════════════════════════════════════════════════
+  Future<void> sendChatMessage(String text) async {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return;
+
+    final msg = ChatMessage(
+      id: _uuid.v4(),
+      coupleId: _coupleId,
+      senderId: _currentUserId,
+      text: trimmed,
+      createdAt: DateTime.now().toUtc(),
+    );
+
+    _chatMessages.add(msg);
+    if (_chatMessages.length > 500) {
+      _chatMessages.removeRange(0, _chatMessages.length - 500);
+    }
+    await _saveToStorage();
+    notifyListeners();
+
+    if (_realtimeChannel != null) {
+      try {
+        await _realtimeChannel!.sendBroadcastMessage(
+          event: 'chat_message',
+          payload: {
+            'sender_id': _currentUserId,
+            'data': msg.toJson(),
+          },
+        );
+      } catch (e) {
+        debugPrint('Notice broadcasting chat_message: $e');
+      }
+    }
+
+    if (SupabaseConfig.isInitialized && _coupleId.isNotEmpty) {
+      try {
+        final client = Supabase.instance.client;
+        await client.from('couple_chat_messages').insert(msg.toJson());
+      } catch (e) {
+        debugPrint('Notice inserting chat message: $e');
+      }
+    }
+  }
+
+  Future<void> sendViewOncePhoto({
+    required Uint8List bytes,
+    required String fileExtension,
+  }) async {
+    final msgId = _uuid.v4();
+    String? publicUrl;
+    final fileName = '$msgId.$fileExtension';
+    final storagePath = '$_coupleId/$fileName';
+
+    if (SupabaseConfig.isInitialized && _coupleId.isNotEmpty) {
+      try {
+        final client = Supabase.instance.client;
+        await client.storage.from('chat_images').uploadBinary(
+          storagePath,
+          bytes,
+          fileOptions: FileOptions(
+            contentType: 'image/$fileExtension',
+            upsert: true,
+          ),
+        );
+        publicUrl = client.storage.from('chat_images').getPublicUrl(storagePath);
+      } catch (e) {
+        debugPrint('Notice uploading photo to storage: $e');
+      }
+    }
+
+    final msg = ChatMessage(
+      id: msgId,
+      coupleId: _coupleId,
+      senderId: _currentUserId,
+      text: 'View-Once Photo',
+      imageUrl: publicUrl ?? storagePath,
+      isViewOnce: true,
+      isViewed: false,
+      createdAt: DateTime.now().toUtc(),
+    );
+
+    _chatMessages.add(msg);
+    if (_chatMessages.length > 500) {
+      _chatMessages.removeRange(0, _chatMessages.length - 500);
+    }
+    await _saveToStorage();
+    notifyListeners();
+
+    if (_realtimeChannel != null) {
+      try {
+        await _realtimeChannel!.sendBroadcastMessage(
+          event: 'chat_message',
+          payload: {
+            'sender_id': _currentUserId,
+            'data': msg.toJson(),
+          },
+        );
+      } catch (e) {
+        debugPrint('Notice broadcasting photo message: $e');
+      }
+    }
+
+    if (SupabaseConfig.isInitialized && _coupleId.isNotEmpty) {
+      try {
+        final client = Supabase.instance.client;
+        await client.from('couple_chat_messages').insert(msg.toJson());
+      } catch (e) {
+        debugPrint('Notice inserting photo message to DB: $e');
+      }
+    }
+  }
+
+  Future<void> markChatMessagesAsRead() async {
+    final now = DateTime.now().toUtc();
+    final unread = _chatMessages.where((m) => m.senderId != _currentUserId && m.readAt == null).toList();
+    if (unread.isEmpty) return;
+
+    for (int i = 0; i < _chatMessages.length; i++) {
+      final m = _chatMessages[i];
+      if (m.senderId != _currentUserId && m.readAt == null) {
+        _chatMessages[i] = m.copyWith(readAt: now);
+      }
+    }
+    await _saveToStorage();
+    notifyListeners();
+
+    if (_realtimeChannel != null) {
+      try {
+        await _realtimeChannel!.sendBroadcastMessage(
+          event: 'chat_read',
+          payload: {
+            'sender_id': _currentUserId,
+            'read_at': now.toIso8601String(),
+          },
+        );
+      } catch (e) {
+        debugPrint('Notice broadcasting chat_read: $e');
+      }
+    }
+
+    if (SupabaseConfig.isInitialized && _coupleId.isNotEmpty) {
+      try {
+        final client = Supabase.instance.client;
+        final unreadIds = unread.map((m) => m.id).toList();
+        await client.from('couple_chat_messages').update({
+          'read_at': now.toIso8601String(),
+        }).inFilter('id', unreadIds);
+      } catch (e) {
+        debugPrint('Notice updating read_at in Supabase: $e');
+      }
+    }
+  }
+
+  Future<void> reactToChatMessage(String messageId, String emoji) async {
+    final idx = _chatMessages.indexWhere((m) => m.id == messageId);
+    if (idx == -1) return;
+
+    final existing = _chatMessages[idx];
+    final updatedReactions = Map<String, String>.from(existing.reactions);
+    if (updatedReactions[_currentUserId] == emoji) {
+      updatedReactions.remove(_currentUserId);
+    } else {
+      updatedReactions[_currentUserId] = emoji;
+    }
+    _chatMessages[idx] = existing.copyWith(reactions: updatedReactions);
+    await _saveToStorage();
+    notifyListeners();
+
+    if (_realtimeChannel != null) {
+      try {
+        await _realtimeChannel!.sendBroadcastMessage(
+          event: 'chat_reaction',
+          payload: {
+            'message_id': messageId,
+            'sender_id': _currentUserId,
+            'emoji': updatedReactions[_currentUserId] ?? '',
+          },
+        );
+      } catch (e) {
+        debugPrint('Notice broadcasting chat_reaction: $e');
+      }
+    }
+
+    if (SupabaseConfig.isInitialized && _coupleId.isNotEmpty) {
+      try {
+        final client = Supabase.instance.client;
+        await client.from('couple_chat_messages').update({
+          'reactions': updatedReactions,
+        }).eq('id', messageId);
+      } catch (e) {
+        debugPrint('Notice updating reaction in Supabase: $e');
+      }
+    }
+  }
+
+  Future<void> viewAndBurnPhoto(String messageId) async {
+    final idx = _chatMessages.indexWhere((m) => m.id == messageId);
+    if (idx == -1) return;
+
+    final existing = _chatMessages[idx];
+    if (existing.isViewed) return;
+
+    final rawUrl = existing.imageUrl;
+    _chatMessages[idx] = existing.copyWith(isViewed: true, clearImage: true);
+    await _saveToStorage();
+    notifyListeners();
+
+    // Immediately remove from Supabase Storage bucket
+    if (SupabaseConfig.isInitialized && rawUrl != null && rawUrl.isNotEmpty) {
+      try {
+        final client = Supabase.instance.client;
+        String path = rawUrl;
+        if (rawUrl.contains('/chat_images/')) {
+          path = rawUrl.split('/chat_images/').last;
+        }
+        await client.storage.from('chat_images').remove([path]);
+      } catch (e) {
+        debugPrint('Notice deleting burned photo from storage: $e');
+      }
+    }
+
+    if (_realtimeChannel != null) {
+      try {
+        await _realtimeChannel!.sendBroadcastMessage(
+          event: 'chat_photo_viewed',
+          payload: {
+            'message_id': messageId,
+            'sender_id': _currentUserId,
+          },
+        );
+      } catch (e) {
+        debugPrint('Notice broadcasting chat_photo_viewed: $e');
+      }
+    }
+
+    if (SupabaseConfig.isInitialized && _coupleId.isNotEmpty) {
+      try {
+        final client = Supabase.instance.client;
+        await client.from('couple_chat_messages').update({
+          'is_viewed': true,
+          'image_url': null,
+        }).eq('id', messageId);
+      } catch (e) {
+        debugPrint('Notice updating burned photo in Supabase: $e');
+      }
+    }
+  }
+
+  Future<void> clearChatHistory() async {
+    _chatMessages.clear();
+    await _saveToStorage();
+    notifyListeners();
+
+    if (_realtimeChannel != null) {
+      try {
+        await _realtimeChannel!.sendBroadcastMessage(
+          event: 'chat_cleared',
+          payload: {
+            'sender_id': _currentUserId,
+          },
+        );
+      } catch (e) {
+        debugPrint('Notice broadcasting chat_cleared: $e');
+      }
+    }
+
+    if (SupabaseConfig.isInitialized && _coupleId.isNotEmpty) {
+      try {
+        final client = Supabase.instance.client;
+        await client.from('couple_chat_messages').delete().eq('couple_id', _coupleId);
+      } catch (e) {
+        debugPrint('Notice clearing chat history in Supabase: $e');
+      }
+    }
+  }
+
+  @visibleForTesting
+  void addChatMessageForTesting(ChatMessage msg) {
+    _chatMessages.add(msg);
     notifyListeners();
   }
 
@@ -1056,6 +1347,98 @@ class CoupleRepository extends ChangeNotifier {
               notifyListeners();
             },
           )
+          .onBroadcast(
+            event: 'chat_message',
+            callback: (payload) async {
+              final senderId = payload['sender_id'] as String?;
+              if (senderId != null && senderId != _currentUserId) {
+                final msgJson = payload['data'] as Map<String, dynamic>;
+                final newMsg = ChatMessage.fromJson(msgJson);
+                _chatMessages.removeWhere((m) => m.id == newMsg.id);
+                _chatMessages.add(newMsg);
+                if (_chatMessages.length > 500) {
+                  _chatMessages.removeRange(0, _chatMessages.length - 500);
+                }
+                await _saveToStorage();
+                NotificationService().showNotification(
+                  id: 30,
+                  title: newMsg.isViewOnce
+                      ? 'View-Once Photo 📸'
+                      : (_partnerName.isNotEmpty ? _partnerName : 'Your partner'),
+                  body: newMsg.isViewOnce ? 'Sent you a private view-once photo' : newMsg.text,
+                  soundId: _sparkSoundId,
+                );
+                notifyListeners();
+              }
+            },
+          )
+          .onBroadcast(
+            event: 'chat_reaction',
+            callback: (payload) async {
+              final msgId = payload['message_id'] as String?;
+              final senderId = payload['sender_id'] as String?;
+              final emoji = payload['emoji'] as String?;
+              if (msgId != null && senderId != null) {
+                final idx = _chatMessages.indexWhere((m) => m.id == msgId);
+                if (idx != -1) {
+                  final existing = _chatMessages[idx];
+                  final newReactions = Map<String, String>.from(existing.reactions);
+                  if (emoji == null || emoji.isEmpty) {
+                    newReactions.remove(senderId);
+                  } else {
+                    newReactions[senderId] = emoji;
+                  }
+                  _chatMessages[idx] = existing.copyWith(reactions: newReactions);
+                  await _saveToStorage();
+                  notifyListeners();
+                }
+              }
+            },
+          )
+          .onBroadcast(
+            event: 'chat_read',
+            callback: (payload) async {
+              final senderId = payload['sender_id'] as String?;
+              if (senderId != null && senderId != _currentUserId) {
+                final readTimeStr = payload['read_at'] as String?;
+                final readTime = readTimeStr != null ? DateTime.parse(readTimeStr) : DateTime.now();
+                bool changed = false;
+                for (int i = 0; i < _chatMessages.length; i++) {
+                  final m = _chatMessages[i];
+                  if (m.senderId == _currentUserId && m.readAt == null) {
+                    _chatMessages[i] = m.copyWith(readAt: readTime);
+                    changed = true;
+                  }
+                }
+                if (changed) {
+                  await _saveToStorage();
+                  notifyListeners();
+                }
+              }
+            },
+          )
+          .onBroadcast(
+            event: 'chat_photo_viewed',
+            callback: (payload) async {
+              final msgId = payload['message_id'] as String?;
+              if (msgId != null) {
+                final idx = _chatMessages.indexWhere((m) => m.id == msgId);
+                if (idx != -1) {
+                  _chatMessages[idx] = _chatMessages[idx].copyWith(isViewed: true, imageUrl: null);
+                  await _saveToStorage();
+                  notifyListeners();
+                }
+              }
+            },
+          )
+          .onBroadcast(
+            event: 'chat_cleared',
+            callback: (payload) async {
+              _chatMessages.clear();
+              await _saveToStorage();
+              notifyListeners();
+            },
+          )
           .subscribe();
     } catch (e) {
       debugPrint('Realtime setup notice: $e');
@@ -1114,6 +1497,14 @@ class CoupleRepository extends ChangeNotifier {
           _memories.clear();
           for (final item in rawMemories) {
             _memories.add(CoupleMemory.fromJson(item as Map<String, dynamic>));
+          }
+        }
+
+        if (data['chatMessages'] != null) {
+          final rawChat = data['chatMessages'] as List<dynamic>;
+          _chatMessages.clear();
+          for (final item in rawChat) {
+            _chatMessages.add(ChatMessage.fromJson(item as Map<String, dynamic>));
           }
         }
 
@@ -1182,6 +1573,7 @@ class CoupleRepository extends ChangeNotifier {
         'moodSignals': _moodSignals,
         'scheduledDates': _scheduledDates.map((e) => e.toJson()).toList(),
         'memories': _memories.map((e) => e.toJson()).toList(),
+        'chatMessages': _chatMessages.map((e) => e.toStorageJson()).toList(),
         'readMemoryIds': _readMemoryIds.toList(),
         'lastViewedMemoriesAt': _lastViewedMemoriesAt?.toIso8601String(),
         'firedNudgeKeys': _firedNudgeKeys.toList(),
@@ -1513,6 +1905,8 @@ class CoupleRepository extends ChangeNotifier {
     _partnerRole = '';
     _partnerAvatarUrl = '';
     _partnerTracksCycle = false;
+    _scheduledDates.clear();
+    _chatMessages.clear();
     await _saveToStorage();
     notifyListeners();
   }
@@ -2140,39 +2534,43 @@ class CoupleRepository extends ChangeNotifier {
         }
 
         // Fetch scheduled dates
-        try {
-          final datesRes = await client
-              .from('scheduled_intimacy')
-              .select()
-              .eq('couple_id', _coupleId)
-              .order('scheduled_at', ascending: false);
-          if (datesRes.isNotEmpty) {
-            final serverDates = datesRes.map((d) => ScheduledIntimacy.fromJson(d)).toList();
-            _scheduledDates.clear();
-            _scheduledDates.addAll(serverDates);
-            _rescheduleAllUpcomingNudges();
-          } else if (_scheduledDates.isNotEmpty) {
-            for (final d in _scheduledDates) {
-              try {
-                await client.from('scheduled_intimacy').upsert({
-                  'id': d.id,
-                  'couple_id': _coupleId,
-                  'proposed_by': d.proposedBy.isNotEmpty ? d.proposedBy : uid,
-                  'scheduled_at': d.scheduledAt.toUtc().toIso8601String(),
-                  'status': d.status.name,
-                  'counter_scheduled_at': d.counterScheduledAt?.toUtc().toIso8601String(),
-                  'response_note': d.responseNote,
-                  'vibe_check_status': d.vibeCheckStatus.name,
-                  'created_at': d.createdAt.toUtc().toIso8601String(),
-                  'updated_at': DateTime.now().toUtc().toIso8601String(),
-                });
-              } catch (e) {
-                debugPrint('Notice upserting local date: $e');
+        if (_isPaired) {
+          try {
+            final datesRes = await client
+                .from('scheduled_intimacy')
+                .select()
+                .eq('couple_id', _coupleId)
+                .order('scheduled_at', ascending: false);
+            if (datesRes.isNotEmpty) {
+              final serverDates = datesRes.map((d) => ScheduledIntimacy.fromJson(d)).toList();
+              _scheduledDates.clear();
+              _scheduledDates.addAll(serverDates);
+              _rescheduleAllUpcomingNudges();
+            } else if (_scheduledDates.isNotEmpty) {
+              for (final d in _scheduledDates) {
+                try {
+                  await client.from('scheduled_intimacy').upsert({
+                    'id': d.id,
+                    'couple_id': _coupleId,
+                    'proposed_by': d.proposedBy.isNotEmpty ? d.proposedBy : uid,
+                    'scheduled_at': d.scheduledAt.toUtc().toIso8601String(),
+                    'status': d.status.name,
+                    'counter_scheduled_at': d.counterScheduledAt?.toUtc().toIso8601String(),
+                    'response_note': d.responseNote,
+                    'vibe_check_status': d.vibeCheckStatus.name,
+                    'created_at': d.createdAt.toUtc().toIso8601String(),
+                    'updated_at': DateTime.now().toUtc().toIso8601String(),
+                  });
+                } catch (e) {
+                  debugPrint('Notice upserting local date: $e');
+                }
               }
             }
+          } catch (e) {
+            debugPrint('Notice fetching scheduled dates: $e');
           }
-        } catch (e) {
-          debugPrint('Notice fetching scheduled dates: $e');
+        } else {
+          _scheduledDates.clear();
         }
 
         // Fetch current mood window status
@@ -2208,6 +2606,28 @@ class CoupleRepository extends ChangeNotifier {
           await _saveToStorage();
         } catch (e) {
           debugPrint('Notice fetching couple memories: $e');
+        }
+
+        // Fetch couple chat messages
+        if (_isPaired) {
+          try {
+            final chatRes = await client
+                .from('couple_chat_messages')
+                .select()
+                .eq('couple_id', _coupleId)
+                .order('created_at', ascending: true)
+                .limit(500);
+            if (chatRes.isNotEmpty) {
+              _chatMessages.clear();
+              for (final c in chatRes) {
+                _chatMessages.add(ChatMessage.fromJson(c));
+              }
+            }
+          } catch (e) {
+            debugPrint('Notice fetching chat messages: $e');
+          }
+        } else {
+          _chatMessages.clear();
         }
 
         if (_isPaired) {
@@ -2271,6 +2691,7 @@ class CoupleRepository extends ChangeNotifier {
     _scheduledDates.clear();
     _memories.clear();
     _readMemoryIds.clear();
+    _chatMessages.clear();
     _lastViewedMemoriesAt = null;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kPrefKey);
@@ -2298,6 +2719,19 @@ class CoupleRepository extends ChangeNotifier {
   @visibleForTesting
   void setUserEmailForTesting(String email) {
     _userEmail = email;
+    notifyListeners();
+  }
+
+  @visibleForTesting
+  void setCurrentUserIdForTesting(String id) {
+    _currentUserId = id;
+    notifyListeners();
+  }
+
+  @visibleForTesting
+  void setChatMessagesForTesting(List<ChatMessage> messages) {
+    _chatMessages.clear();
+    _chatMessages.addAll(messages);
     notifyListeners();
   }
 

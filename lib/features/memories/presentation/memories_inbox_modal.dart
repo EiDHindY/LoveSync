@@ -1,29 +1,42 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:love_app/core/providers/app_providers.dart';
 import 'package:love_app/core/theme/app_theme.dart';
+import 'package:love_app/features/chat/presentation/dm_chat_view.dart';
 import 'package:love_app/features/memories/domain/couple_memory.dart';
 import 'package:love_app/features/scheduling/domain/scheduled_intimacy.dart';
 
-enum MemoryFilter { all, sparks, dates }
+enum MemoryFilter { all, sparks, dates, chat }
 
-class MemoriesInboxModal extends StatefulWidget {
+class MemoriesInboxModal extends ConsumerStatefulWidget {
   final List<CoupleMemory> memories;
   final List<ScheduledIntimacy>? scheduledDates;
   final Future<void> Function()? onClearAll;
+  final VoidCallback? onOpenPairing;
+  final MemoryFilter initialFilter;
 
   const MemoriesInboxModal({
     super.key,
     required this.memories,
     this.scheduledDates,
     this.onClearAll,
+    this.onOpenPairing,
+    this.initialFilter = MemoryFilter.all,
   });
 
   @override
-  State<MemoriesInboxModal> createState() => _MemoriesInboxModalState();
+  ConsumerState<MemoriesInboxModal> createState() => _MemoriesInboxModalState();
 }
 
-class _MemoriesInboxModalState extends State<MemoriesInboxModal> {
-  MemoryFilter _selectedFilter = MemoryFilter.all;
+class _MemoriesInboxModalState extends ConsumerState<MemoriesInboxModal> {
+  late MemoryFilter _selectedFilter;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedFilter = widget.initialFilter;
+  }
 
   String _formatTime(DateTime dt) {
     final now = DateTime.now();
@@ -71,9 +84,12 @@ class _MemoriesInboxModalState extends State<MemoriesInboxModal> {
     final totalDateItems = dateMemories.length + nonDuplicateScheduled.length;
     final totalMoments = widget.memories.length + nonDuplicateScheduled.length;
     final isEmpty = totalMoments == 0;
+    final unreadChatCount = ref.watch(unreadChatCountProvider);
+    final isChatTab = _selectedFilter == MemoryFilter.chat;
 
     return Container(
-      height: MediaQuery.of(context).size.height * 0.80,
+      height: MediaQuery.of(context).size.height * (isChatTab ? 0.94 : 0.80),
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
@@ -93,136 +109,150 @@ class _MemoriesInboxModalState extends State<MemoriesInboxModal> {
           const SizedBox(height: 14),
 
           // Header
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF8B0029), Color(0xFFC70039)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
+          if (!isChatTab)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF8B0029), Color(0xFFC70039)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFC70039).withValues(alpha: 0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
                     ),
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFFC70039).withValues(alpha: 0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
+                    child: const Icon(Icons.mark_email_unread_rounded, color: Colors.white, size: 20),
                   ),
-                  child: const Icon(Icons.mark_email_unread_rounded, color: Colors.white, size: 20),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Memories & Spark Inbox',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.plum,
-                        ),
-                      ),
-                      Text(
-                        isEmpty
-                            ? 'Your shared intimacy timeline'
-                            : '$totalMoments documented moment${totalMoments == 1 ? '' : 's'}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (!isEmpty && widget.onClearAll != null)
-                  IconButton(
-                    tooltip: 'Clear memories',
-                    icon: const Icon(Icons.delete_outline_rounded, color: Colors.grey, size: 20),
-                    onPressed: () async {
-                      final confirmed = await showDialog<bool>(
-                        context: context,
-                        builder: (ctx) => AlertDialog(
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                          title: const Text('Clear All Memories?'),
-                          content: const Text(
-                            'This will remove all documented moments so you can retest memories from scratch.',
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Memories & Spark Inbox',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.plum,
                           ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.of(ctx).pop(false),
-                              child: const Text('Cancel'),
-                            ),
-                            ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppTheme.crimson,
-                                foregroundColor: Colors.white,
-                              ),
-                              onPressed: () => Navigator.of(ctx).pop(true),
-                              child: const Text('Clear All'),
-                            ),
-                          ],
                         ),
-                      );
-                      if (confirmed == true) {
-                        await widget.onClearAll!();
-                        if (context.mounted) {
-                          Navigator.of(context).pop();
-                        }
-                      }
-                    },
+                        Text(
+                          isEmpty
+                              ? 'Your shared intimacy timeline'
+                              : '$totalMoments documented moment${totalMoments == 1 ? '' : 's'}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                IconButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.close_rounded, color: Colors.grey),
-                ),
-              ],
+                  if (!isEmpty && widget.onClearAll != null)
+                    IconButton(
+                      tooltip: 'Clear memories',
+                      icon: const Icon(Icons.delete_outline_rounded, color: Colors.grey, size: 20),
+                      onPressed: () async {
+                        final confirmed = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                            title: const Text('Clear All Memories?'),
+                            content: const Text(
+                              'This will remove all documented moments so you can retest memories from scratch.',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.of(ctx).pop(false),
+                                child: const Text('Cancel'),
+                              ),
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppTheme.crimson,
+                                  foregroundColor: Colors.white,
+                                ),
+                                onPressed: () => Navigator.of(ctx).pop(true),
+                                child: const Text('Clear All'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirmed == true) {
+                          await widget.onClearAll!();
+                          if (context.mounted) {
+                            Navigator.of(context).pop();
+                          }
+                        }
+                      },
+                    ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded, color: Colors.grey),
+                  ),
+                ],
+              ),
+            ),
+
+          const SizedBox(height: 10),
+          // Filter Segment Pills
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _buildFilterPill(
+                    label: 'All ($totalMoments)',
+                    filter: MemoryFilter.all,
+                    icon: Icons.auto_awesome_rounded,
+                  ),
+                  const SizedBox(width: 8),
+                  _buildFilterPill(
+                    label: 'Mutual Sparks (${sparkMemories.length})',
+                    filter: MemoryFilter.sparks,
+                    icon: Icons.local_fire_department_rounded,
+                  ),
+                  const SizedBox(width: 8),
+                  _buildFilterPill(
+                    label: 'Scheduled Dates ($totalDateItems)',
+                    filter: MemoryFilter.dates,
+                    icon: Icons.event_available_rounded,
+                  ),
+                  const SizedBox(width: 8),
+                  _buildFilterPill(
+                    label: 'Direct Chat',
+                    filter: MemoryFilter.chat,
+                    icon: Icons.chat_bubble_rounded,
+                    badgeCount: unreadChatCount,
+                  ),
+                ],
+              ),
             ),
           ),
 
-          if (!isEmpty) ...[
-            const SizedBox(height: 12),
-            // Filter Segment Pills
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _buildFilterPill(
-                      label: 'All ($totalMoments)',
-                      filter: MemoryFilter.all,
-                      icon: Icons.auto_awesome_rounded,
-                    ),
-                    const SizedBox(width: 8),
-                    _buildFilterPill(
-                      label: 'Mutual Sparks (${sparkMemories.length})',
-                      filter: MemoryFilter.sparks,
-                      icon: Icons.local_fire_department_rounded,
-                    ),
-                    const SizedBox(width: 8),
-                    _buildFilterPill(
-                      label: 'Scheduled Dates ($totalDateItems)',
-                      filter: MemoryFilter.dates,
-                      icon: Icons.event_available_rounded,
-                    ),
-                  ],
-                ),
+          const Divider(height: 16),
+
+          // Content Area
+          if (isChatTab)
+            Expanded(
+              child: DmChatView(
+                onClose: () => setState(() => _selectedFilter = MemoryFilter.all),
+                onOpenPairing: widget.onOpenPairing,
               ),
-            ),
-          ],
-
-          const Divider(height: 20),
-
-          // Content List
-          Expanded(
-            child: isEmpty
+            )
+          else
+            Expanded(
+              child: isEmpty
                 ? Center(
                     child: Padding(
                       padding: const EdgeInsets.all(32),
@@ -329,6 +359,7 @@ class _MemoriesInboxModalState extends State<MemoriesInboxModal> {
     required String label,
     required MemoryFilter filter,
     required IconData icon,
+    int badgeCount = 0,
   }) {
     final isSelected = _selectedFilter == filter;
     return InkWell(
@@ -370,6 +401,24 @@ class _MemoriesInboxModalState extends State<MemoriesInboxModal> {
                 color: isSelected ? Colors.white : AppTheme.plum,
               ),
             ),
+            if (badgeCount > 0) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppTheme.crimson,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  badgeCount > 99 ? '99+' : '$badgeCount',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),

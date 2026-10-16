@@ -94,6 +94,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   void _openScheduleModal(BuildContext context) {
     final repo = ref.read(coupleRepositoryProvider);
+    if (!repo.isPaired) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Pair with your partner first to schedule a date night together!'),
+          backgroundColor: AppTheme.deepBerry,
+        ),
+      );
+      _openPairingModal(context);
+      return;
+    }
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -691,6 +701,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         scheduledDates: scheduledDates,
         onClearAll: () async {
           await ref.read(coupleRepositoryProvider.notifier).clearAllMemories();
+        },
+        onOpenPairing: () {
+          Navigator.of(ctx).pop();
+          _openPairingModal(context);
         },
       ),
     );
@@ -1581,10 +1595,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final fertility = ref.watch(todayFertilityProvider);
     final mood = ref.watch(todayMoodStatusProvider);
     final scheduledDates = ref.watch(scheduledDatesProvider);
-    final unreadCount = ref.watch(unreadMemoriesCountProvider);
+    final unreadCount = ref.watch(unreadInboxTotalProvider);
     final now = DateTime.now();
     ScheduledIntimacy? nextDate;
-    if (scheduledDates.isNotEmpty) {
+    if (repo.isPaired && scheduledDates.isNotEmpty) {
       final upcoming = scheduledDates
           .where((d) => !d.scheduledAt.toLocal().isBefore(now) && d.status != IntimacyStatus.completed && d.status != IntimacyStatus.rainchecked && d.status != IntimacyStatus.canceled)
           .toList();

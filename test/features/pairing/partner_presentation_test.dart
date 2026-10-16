@@ -7,6 +7,7 @@ import 'package:love_app/core/theme/app_theme.dart';
 import 'package:love_app/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:love_app/features/pairing/presentation/partner_info_modal.dart';
 import 'package:love_app/features/pairing/presentation/pairing_modal.dart';
+import 'package:love_app/features/scheduling/presentation/widgets/scheduled_date_card.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -176,5 +177,46 @@ void main() {
     expect(find.text('alex@gmail.com'), findsOneWidget);
     expect(find.text('Your Role'), findsOneWidget);
     expect(find.text('Connection Status'), findsOneWidget);
+  });
+
+  testWidgets('When unpaired: shows default schedule date section even if dates exist and prompts to pair', (tester) async {
+    tester.view.physicalSize = const Size(800, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() => tester.view.resetPhysicalSize());
+
+    final repo = CoupleRepository();
+    repo.setPartnerForTesting(
+      isPaired: false,
+    );
+    // Add a date that would otherwise show if paired
+    await repo.proposeDate(DateTime.now().add(const Duration(days: 3)));
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          coupleRepositoryProvider.overrideWith((ref) => repo),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.lightTheme,
+          home: const DashboardScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Verify default schedule date section is displayed, not an active date card
+    expect(find.text('No upcoming date scheduled'), findsOneWidget);
+    expect(find.text('Schedule a Date'), findsOneWidget);
+
+    final dateCard = tester.widget<ScheduledDateCard>(find.byType(ScheduledDateCard));
+    expect(dateCard.dateItem, isNull);
+
+    // Call onOpenScheduleModal directly
+    dateCard.onOpenScheduleModal();
+    await tester.pumpAndSettle();
+
+    // Verify prompt to pair and PairingModal opens
+    expect(find.text('Pair with your partner first to schedule a date night together!'), findsOneWidget);
+    expect(find.byType(PairingModal), findsOneWidget);
   });
 }
